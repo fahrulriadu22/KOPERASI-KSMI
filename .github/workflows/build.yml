@@ -1,0 +1,82 @@
+name: Build Debug APK Koperasi KSMI
+
+on: 
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        channel: 'stable'
+        cache: true
+        
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+        
+    # ✅ CLEAN PUB CACHE DULU - PENTING!
+    - name: Clean pub cache
+      run: |
+        rm -rf ~/.pub-cache/hosted/pub.dev/workmanager-*
+        rm -rf ~/.pub-cache/git/workmanager*
+        echo "🧹 Workmanager cache cleaned"
+
+    # ✅ INSTALL DEPENDENCIES (ambil versi git dari pubspec.yaml)
+    - name: Install dependencies
+      run: flutter pub get
+
+    # ✅ PATCH flutter_local_notifications BigPictureStyle BUG
+    - name: Patch flutter_local_notifications BigPictureStyle bug
+      run: |
+        find ~/.pub-cache -name "FlutterLocalNotificationsPlugin.java" -path "*/flutter_local_notifications-*/android/src/main/java/com/dexterous/flutterlocalnotifications/FlutterLocalNotificationsPlugin.java" | while read file; do
+          echo "🔧 Patching $file"
+          sed -i 's/bigLargeIcon(null)/bigLargeIcon((android.graphics.Bitmap) null)/' "$file"
+        done
+
+    # ✅ UPDATE ANDROID SDK & NDK VERSION
+    - name: Update Android SDK and NDK versions
+      run: |
+        echo "🔄 Updating build.gradle.kts with correct versions..."
+        sed -i 's/compileSdk = [0-9]*/compileSdk = 36/' android/app/build.gradle.kts
+        sed -i 's/targetSdk = [0-9]*/targetSdk = 36/' android/app/build.gradle.kts  
+        sed -i 's/ndkVersion = ".*"/ndkVersion = "27.0.12077973"/' android/app/build.gradle.kts
+        
+        echo "✅ Updated build.gradle.kts:"
+        grep -E "(compileSdk|targetSdk|ndkVersion)" android/app/build.gradle.kts
+
+    # ✅ PATCH WORKMANAGER namespace — berlaku untuk versi git & pub.dev
+    - name: Patch Workmanager namespace
+      run: |
+        WORK_PATH=$(find ~/.pub-cache -type d -name "workmanager-*" | head -n 1)
+        if [ -f "$WORK_PATH/android/build.gradle" ]; then
+          echo "namespace 'dev.fluttercommunity.workmanager'" >> "$WORK_PATH/android/build.gradle"
+          echo "✅ Namespace added to: $WORK_PATH/android/build.gradle"
+        else
+          echo "⚠️ Workmanager build.gradle not found"
+        fi
+
+    - name: Clean Flutter
+      run: flutter clean
+
+    - name: Get dependencies again
+      run: flutter pub get
+      
+    - name: Build debug APK
+      run: flutter build apk --debug
+        
+    - name: Upload debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: koperasi-ksmi-debug-apk
+        path: build/app/outputs/flutter-apk/app-debug.apk
