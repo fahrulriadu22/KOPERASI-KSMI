@@ -1187,121 +1187,13 @@ void _navigateToRiwayatTabungan(BuildContext context, MenuIcon menu, Map<String,
   DashboardMain.navigateToTab(context, 1); // Index 1 = Tabungan
 }
 
-// ✅ NAVIGASI KE RIWAYAT ANGSURAN DENGAN AUTO-OPEN
-void _navigateToRiwayatAngsuran(BuildContext context, Map<String, dynamic> userData) async {
-  print('🚀 Navigating to RiwayatAngsuran with auto-detail');
-  
-  // ✅ SET FLAG UNTUK AUTO OPEN DETAIL
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool('auto_open_angsuran_detail', true);
+// ✅ NAVIGASI KE RIWAYAT ANGSURAN
+void _navigateToRiwayatAngsuran(BuildContext context, Map<String, dynamic> userData) {
+  print('🚀 Navigating to RiwayatAngsuran with bottom nav');
   
   // Panggil static method dari DashboardMain
   DashboardMain.navigateToTab(context, 2); // Index 2 = Taqsith
 }
-
-  // ✅ PERBAIKAN: SHOW SALDO DETAIL DENGAN DATA YANG AKURAT
-  void _showSaldoDetail(BuildContext context) {
-    final saldo = _getSaldoValue();
-    final totalTabungan = _calculateTotalTabungan();
-    final pokok = _getApiValue('pokok', _saldoData);
-    final wajib = _getApiValue('wajib', _saldoData);
-    final sukarela = _getApiValue('sukarela', _saldoData);
-    final sitabung = _getApiValue('sitabung', _saldoData);
-    final siumna = _getApiValue('siumna', _saldoData);
-    final siquna = _getApiValue('siquna', _saldoData);
-    final angsuran = _getAngsuranValue();
-
-    print('''
-  📋 Saldo Detail Dialog:
-  - Saldo: $saldo
-  - Total Tabungan: $totalTabungan
-  - Pokok: $pokok
-  - Wajib: $wajib
-  - Sukarela: $sukarela
-  - Sitabung: $sitabung
-  - Siumna: $siumna
-  - Siquna: $siquna
-  - Angsuran: $angsuran
-  ''');
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(Icons.account_balance_wallet, color: Colors.green[700]),
-            const SizedBox(width: 8),
-            const Text(
-              'Detail Saldo & Tabungan',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSaldoDetailItem('Saldo Tersedia', saldo, Colors.green),
-            const SizedBox(height: 8),
-            _buildSaldoDetailItem('Total Tabungan', totalTabungan, Colors.blue),
-            _buildSaldoDetailItem('Total Angsuran', angsuran, Colors.amber),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.green[50],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Rincian Tabungan:',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                  const SizedBox(height: 6),
-                  _buildTabunganDetailRow('Pokok', pokok),
-                  _buildTabunganDetailRow('Wajib', wajib),
-                  _buildTabunganDetailRow('Sukarela', sukarela),
-                  _buildTabunganDetailRow('SiTabung', sitabung),
-                  _buildTabunganDetailRow('Siumna', siumna),
-                  _buildTabunganDetailRow('Siquna', siquna),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Data diperbarui: ${DateTime.now().toString().substring(0, 16)}',
-              style: const TextStyle(fontSize: 10, color: Colors.grey),
-            ),
-            if (_hasError)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  '⚠️ $_errorMessage',
-                  style: const TextStyle(fontSize: 10, color: Colors.orange),
-                ),
-              ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Tutup'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _refreshData();
-            },
-            child: const Text('Refresh'),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildSaldoDetailItem(String label, int value, Color color) {
     return Row(

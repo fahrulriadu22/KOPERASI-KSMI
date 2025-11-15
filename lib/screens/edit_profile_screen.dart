@@ -32,94 +32,100 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _showConfirmPassword = false;
   String? _errorMessage;
 
-  // ✅ FIX: GlobalKey untuk ScaffoldMessenger
-  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
-
   @override
   void initState() {
     super.initState();
     print('👤 EditProfileScreen loaded for user: ${widget.user['username']}');
   }
 
-  // ✅ PERBAIKAN: UPDATE PROFILE DENGAN ERROR HANDLING YANG FIXED
-  Future<void> _updateProfile() async {
-    if (!_formKey.currentState!.validate()) {
-      _showSnackBar(
-        content: const Text('Harap perbaiki error pada form terlebih dahulu'),
-        backgroundColor: Colors.orange,
-      );
-      return;
-    }
+Future<void> _updateProfile() async {
+  // Validasi form
+  if (!_formKey.currentState!.validate()) {
+    _showSnackBar(
+      content: const Text('Harap perbaiki error pada form terlebih dahulu'),
+      backgroundColor: Colors.orange,
+    );
+    return;
+  }
 
-    // ✅ VALIDASI PASSWORD
-    if (_oldPasswordController.text.isEmpty) {
-      _showSnackBar(
-        content: const Text('Harap masukkan password lama'),
-        backgroundColor: Colors.orange,
-      );
-      return;
-    }
+  // Validasi password
+  if (_oldPasswordController.text.isEmpty) {
+    _showSnackBar(
+      content: const Text('Harap masukkan password lama'),
+      backgroundColor: Colors.orange,
+    );
+    return;
+  }
 
-    if (_newPasswordController.text.isEmpty) {
-      _showSnackBar(
-        content: const Text('Harap masukkan password baru'),
-        backgroundColor: Colors.orange,
-      );
-      return;
-    }
+  if (_newPasswordController.text.isEmpty) {
+    _showSnackBar(
+      content: const Text('Harap masukkan password baru'),
+      backgroundColor: Colors.orange,
+    );
+    return;
+  }
 
-    if (_newPasswordController.text.length < 6) {
-      _showSnackBar(
-        content: const Text('Password baru minimal 6 karakter'),
-        backgroundColor: Colors.orange,
-      );
-      return;
-    }
+  if (_newPasswordController.text.length < 6) {
+    _showSnackBar(
+      content: const Text('Password baru minimal 6 karakter'),
+      backgroundColor: Colors.orange,
+    );
+    return;
+  }
 
-    if (_newPasswordController.text != _confirmPasswordController.text) {
-      _showSnackBar(
-        content: const Text('Konfirmasi password tidak cocok'),
-        backgroundColor: Colors.orange,
-      );
-      return;
-    }
+  if (_newPasswordController.text != _confirmPasswordController.text) {
+    _showSnackBar(
+      content: const Text('Konfirmasi password tidak cocok'),
+      backgroundColor: Colors.orange,
+    );
+    return;
+  }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  if (!mounted) return;
+  
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+  });
 
-    try {
-      print('🔐 Starting password change...');
+  try {
+    print('🔐 Starting password change...');
 
-      // ✅ UPDATE PASSWORD
-      final passwordResult = await _apiService.changePassword(
-        _oldPasswordController.text.trim(),
-        _newPasswordController.text.trim(),
-        _confirmPasswordController.text.trim(),
-      );
+    final passwordResult = await _apiService.changePassword(
+      _oldPasswordController.text.trim(),
+      _newPasswordController.text.trim(),
+      _confirmPasswordController.text.trim(),
+    );
 
+    // ✅ GUNAKAN addPostFrameCallback untuk memastikan state aman
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-
+      
       setState(() => _isLoading = false);
 
-      // ✅ HANDLE RESPONSE
       if (passwordResult['success'] == true) {
         _handleSuccessResponse();
       } else {
         _handleErrorResponse(passwordResult);
       }
-    } catch (e) {
-      _handleException(e);
-    }
-  }
+    });
 
-  // ✅ FIX: METHOD UNTUK SHOW SNACKBAR YANG AMAN
-  void _showSnackBar({required Widget content, Color backgroundColor = Colors.red, int durationSeconds = 4}) {
-    // Cek jika widget masih mounted
+  } catch (e) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _handleException(e);
+    });
+  }
+}
+
+void _showSnackBar({required Widget content, Color backgroundColor = Colors.red, int durationSeconds = 4}) {
+  // Pastikan context masih tersedia dan widget tidak disposed
+  if (!mounted) return;
+  
+  // Gunakan WidgetsBinding untuk memastikan frame sudah selesai
+  WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!mounted) return;
     
-    // Gunakan ScaffoldMessenger yang aman
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -129,31 +135,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-  }
+  });
+}
 
-  // ✅ METHOD: HANDLE SUCCESS RESPONSE
-  void _handleSuccessResponse() {
-    print('✅ Password changed successfully');
-    
-    // ✅ CLEAR PASSWORD FIELDS SETELAH SUKSES
-    _oldPasswordController.clear();
-    _newPasswordController.clear();
-    _confirmPasswordController.clear();
-    
-    // ✅ SHOW SUCCESS MESSAGE
-    _showSnackBar(
-      content: const Text('Password berhasil diubah ✅'),
-      backgroundColor: Colors.green,
-    );
-    
-    // ✅ PANGGIL CALLBACK DENGAN DATA YANG SAMA
-    widget.onProfileUpdated(widget.user);
-    
-    // ✅ NAVIGATE BACK SETELAH BERHASIL
+void _handleSuccessResponse() {
+  print('✅ Password changed successfully');
+  
+  // Clear password fields
+  _oldPasswordController.clear();
+  _newPasswordController.clear();
+  _confirmPasswordController.clear();
+  
+  // Show success message
+  _showSnackBar(
+    content: const Text('Password berhasil diubah ✅'),
+    backgroundColor: Colors.green,
+  );
+  
+  // Panggil callback
+  widget.onProfileUpdated(widget.user);
+  
+  // Navigate back dengan delay untuk menghindari race condition
+  Future.delayed(const Duration(milliseconds: 500), () {
     if (mounted) {
       Navigator.pop(context);
     }
-  }
+  });
+}
 
   // ✅ FIX: METHOD _handleErrorResponse YANG AMAN
   void _handleErrorResponse(Map<String, dynamic> result) {
@@ -242,58 +250,59 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return 'Terjadi kesalahan: ${exception.toString().replaceAll('Exception: ', '')}';
   }
 
-  // ✅ PERBAIKAN: BUILD ERROR MESSAGE
-  Widget _buildErrorMessage() {
-    if (_errorMessage == null) return const SizedBox.shrink();
-    
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.red[50],
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.red[200]!),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline, color: Colors.red[700], size: 20),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Gagal Mengubah Password',
-                  style: TextStyle(
-                    color: Colors.red[700],
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
+Widget _buildErrorMessage() {
+  if (_errorMessage == null) return const SizedBox.shrink();
+  
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    margin: const EdgeInsets.only(bottom: 16),
+    decoration: BoxDecoration(
+      color: Colors.red[50],
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Colors.red[200]!),
+    ),
+    child: Row(
+      children: [
+        Icon(Icons.error_outline, color: Colors.red[700], size: 20),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Gagal Mengubah Password',
+                style: TextStyle(
+                  color: Colors.red[700],
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  _errorMessage!,
-                  style: TextStyle(
-                    color: Colors.red[700],
-                    fontSize: 13,
-                  ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _errorMessage!,
+                style: TextStyle(
+                  color: Colors.red[700],
+                  fontSize: 13,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          IconButton(
-            icon: Icon(Icons.close, color: Colors.red[700], size: 16),
-            onPressed: () {
+        ),
+        IconButton(
+          icon: Icon(Icons.close, color: Colors.red[700], size: 16),
+          onPressed: () {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted) {
                 setState(() => _errorMessage = null);
               }
-            },
-          ),
-        ],
-      ),
-    );
-  }
+            });
+          },
+        ),
+      ],
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -384,9 +393,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   suffixIcon: IconButton(
                     icon: Icon(_showOldPassword ? Icons.visibility : Icons.visibility_off),
                     onPressed: () {
-                      if (mounted) {
-                        setState(() => _showOldPassword = !_showOldPassword);
-                      }
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          setState(() => _showOldPassword = !_showOldPassword);
+                        }
+                      });
                     },
                   ),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

@@ -202,11 +202,25 @@ static void _backgroundCallbackDispatcher() {
     }
   }
 
-// ✅ PERBAIKI BACKGROUND HANDLER UNTUK AUTO-SYNC
+// ✅ PERBAIKAN: BACKGROUND HANDLER DENGAN PAYLOAD DETAILED
 @pragma('vm:entry-point')
 static Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
   print('📱 FCM BACKGROUND MESSAGE: ${message.data}');
+  
+  // ✅ CEK PAYLOAD DARI BACKGROUND MESSAGE
+  final notificationTitle = message.notification?.title;
+  final notificationBody = message.notification?.body;
+  final dataPayload = message.data;
+  
+  print('🎯 Background FCM Details:');
+  print('   - Title: $notificationTitle');
+  print('   - Body: $notificationBody');
+  print('   - Data: $dataPayload');
+  
+  // ✅ GUNAKAN TITLE & BODY YANG BENAR
+  final title = notificationTitle ?? dataPayload['title'] ?? 'KSMI Koperasi';
+  final body = notificationBody ?? dataPayload['body'] ?? dataPayload['message'] ?? 'Pesan baru';
   
   // ✅ AUTO SYNC DATA MESKI APP DI BACKGROUND
   final service = FirebaseService();
@@ -216,14 +230,14 @@ static Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   // Simpan data notifikasi untuk dibuka nanti
   final prefs = await SharedPreferences.getInstance();
   await prefs.setString('pending_notification', jsonEncode({
-    'title': message.notification?.title,
-    'body': message.notification?.body,
-    'data': message.data,
+    'title': title,
+    'body': body,
+    'data': dataPayload,
     'timestamp': DateTime.now().millisecondsSinceEpoch,
   }));
   
-  // Tampilkan system notification
-  await _showSystemNotificationFromFCM(message);
+  // Tampilkan system notification dengan payload yang benar
+  await _showDetailedSystemNotificationFromFCM(message, title, body);
 }
 
 // ✅ CHECK PENDING NOTIFICATIONS SAAT APP DIBUKA
@@ -248,44 +262,101 @@ Future<void> checkPendingNotifications() async {
   }
 }
 
-  // ✅ REAL-TIME FOREGROUND MESSAGE HANDLER
-  static Future<void> _firebaseForegroundHandler(RemoteMessage message) async {
-    print('📱 FCM FOREGROUND MESSAGE: ${message.data}');
+// ✅ PERBAIKAN: REAL-TIME FOREGROUND MESSAGE HANDLER DENGAN PAYLOAD LENGKAP
+static Future<void> _firebaseForegroundHandler(RemoteMessage message) async {
+  print('📱 FCM FOREGROUND MESSAGE: ${message.data}');
+  
+  // ✅ CEK DETAILED PAYLOAD DARI FCM
+  final notificationTitle = message.notification?.title;
+  final notificationBody = message.notification?.body;
+  final dataPayload = message.data;
+  
+  print('🎯 FCM Notification Details:');
+  print('   - Title: $notificationTitle');
+  print('   - Body: $notificationBody');
+  print('   - Data: $dataPayload');
+  
+  // ✅ GUNAKAN TITLE & BODY DARI FCM JIKA ADA, JIKA TIDAK BARU PAKAI DEFAULT
+  final title = notificationTitle ?? dataPayload['title'] ?? 'KSMI Koperasi';
+  final body = notificationBody ?? dataPayload['body'] ?? dataPayload['message'] ?? 'Pesan baru';
+  
+  final notificationData = {
+    'title': title,
+    'body': body,
+    'data': dataPayload,
+    'timestamp': DateTime.now().millisecondsSinceEpoch,
+    'type': 'foreground',
+    'messageId': message.messageId,
+    // ✅ TAMBAHKAN DETAIL LAINNYA DARI PAYLOAD
+    'notification_type': dataPayload['type'] ?? 'general',
+    'screen': dataPayload['screen'] ?? 'dashboard',
+    'id': dataPayload['id'] ?? '',
+  };
+  
+  print('🎯 Processed Notification:');
+  print('   - Final Title: $title');
+  print('   - Final Body: $body');
+  print('   - Type: ${notificationData['notification_type']}');
+  
+  // ✅ KIRIM KE STREAM UNTUK REAL-TIME UPDATE
+  _instance._notificationStreamController.add(notificationData);
+  
+  // Auto-increment unread count
+  final prefs = await SharedPreferences.getInstance();
+  final currentCount = prefs.getInt('unread_notifications') ?? 0;
+  final newCount = currentCount + 1;
+  await prefs.setInt('unread_notifications', newCount);
+  
+  // ✅ KIRIM UPDATE UNREAD COUNT KE STREAM
+  _instance._unreadCountStreamController.add(newCount);
+  
+  // Trigger inbox sync
+  _instance._syncInboxData();
+  
+  // Notify callback
+  if (onNotificationReceived != null) {
+    onNotificationReceived!(notificationData);
+  }
+  
+  // ✅ TAMPILKAN SYSTEM NOTIFICATION DENGAN TITLE & BODY YANG BENAR
+  await _showDetailedSystemNotificationFromFCM(message, title, body);
+  
+  print('✅ Foreground message processed, unread count: $newCount');
+}
+
+// ✅ PERBAIKAN: SHOW DETAILED SYSTEM NOTIFICATION
+static Future<void> _showDetailedSystemNotificationFromFCM(
+  RemoteMessage message, 
+  String title, 
+  String body
+) async {
+  try {
+    final notifier = SystemNotifier();
+    await notifier.initialize();
     
-    final notificationData = {
-      'title': message.notification?.title ?? 'KSMI Koperasi',
-      'body': message.notification?.body ?? 'Pesan baru',
-      'data': message.data,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-      'type': 'foreground',
-      'messageId': message.messageId,
+    // ✅ BUAT PAYLOAD DETAILED UNTUK NOTIFICATION
+    final Map<String, dynamic> payload = {
+      'type': message.data['type'] ?? 'general',
+      'screen': message.data['screen'] ?? 'dashboard',
+      'id': message.data['id'] ?? '',
+      'title': title,
+      'body': body,
+      'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
     };
     
-    // ✅ KIRIM KE STREAM UNTUK REAL-TIME UPDATE
-    _instance._notificationStreamController.add(notificationData);
+    await notifier.showSystemNotification(
+      id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title: title,
+      body: body,
+      payload: payload,
+    );
     
-    // Auto-increment unread count
-    final prefs = await SharedPreferences.getInstance();
-    final currentCount = prefs.getInt('unread_notifications') ?? 0;
-    final newCount = currentCount + 1;
-    await prefs.setInt('unread_notifications', newCount);
+    print('🎉 Detailed system notification shown: $title');
     
-    // ✅ KIRIM UPDATE UNREAD COUNT KE STREAM
-    _instance._unreadCountStreamController.add(newCount);
-    
-    // Trigger inbox sync
-    _instance._syncInboxData();
-    
-    // Notify callback
-    if (onNotificationReceived != null) {
-      onNotificationReceived!(notificationData);
-    }
-    
-    // Tampilkan system notification
-    await _showSystemNotificationFromFCM(message);
-    
-    print('✅ Foreground message processed, unread count: $newCount');
+  } catch (e) {
+    print('❌ ERROR showing detailed FCM notification: $e');
   }
+}
 
   // ✅ HANDLE INITIAL MESSAGE
   static void _handleInitialMessage(RemoteMessage? message) {

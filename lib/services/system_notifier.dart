@@ -132,66 +132,142 @@ class SystemNotifier {
     }
   }
 
-  // ✅ SHOW SYSTEM NOTIFICATION
-  Future<void> showSystemNotification({
-    required int id,
-    required String title,
-    required String body,
-    Map<String, dynamic>? payload,
-  }) async {
-    try {
-      // ✅ PASTIKAN INIT DULU
-      if (!_isInitialized) {
-        await initialize();
-      }
-
-      print('📱 Preparing SYSTEM notification: $title');
-
-      // ✅ ANDROID NOTIFICATION DETAILS
-      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDescription,
-        importance: Importance.high,
-        priority: Priority.high,
-        playSound: true,
-        enableVibration: true,
-        showWhen: true,
-        autoCancel: true,
-      );
-
-      // ✅ NOTIFICATION DETAILS
-      final NotificationDetails details = NotificationDetails(
-        android: androidDetails,
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      );
-
-      // ✅ FORMAT PAYLOAD JIKA ADA
-      String? payloadString;
-      if (payload != null) {
-        payloadString = _formatPayload(payload);
-      }
-
-      // ✅ SHOW NOTIFICATION
-      await _notifications.show(id, title, body, details, payload: payloadString);
-      
-      print('🎉 SYSTEM NOTIFICATION BERHASIL: $title');
-      print('   → ID: $id');
-      print('   → Channel: $_channelId');
-      print('   → Body: $body');
-      if (payloadString != null) {
-        print('   → Payload: $payloadString');
-      }
-      
-    } catch (e) {
-      print('❌ ERROR showing system notification: $e');
-      rethrow;
+// ✅ PERBAIKAN: SHOW SYSTEM NOTIFICATION DENGAN PAYLOAD YANG DETAILED + ICON
+Future<void> showSystemNotification({
+  required int id,
+  required String title,
+  required String body,
+  Map<String, dynamic>? payload,
+}) async {
+  try {
+    // ✅ PASTIKAN INIT DULU
+    if (!_isInitialized) {
+      await initialize();
     }
+
+    print('📱 Preparing SYSTEM notification: $title');
+
+    // ✅ PERBAIKAN: ANDROID NOTIFICATION DETAILS DENGAN ICON
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDescription,
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      showWhen: true,
+      autoCancel: true,
+      // ✅ TAMBAHKAN ICON - PAKAI ic_launcher.png YANG BULAT PUTIH
+      smallIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+      largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+      // ✅ TAMBAHKAN STYLE UNTUK NOTIFIKASI YANG LEBIH INFORMATIF
+      styleInformation: BigTextStyleInformation(
+        body,
+        htmlFormatBigText: true,
+        contentTitle: title,
+        htmlFormatContentTitle: true,
+        summaryText: 'KSMI Koperasi',
+        htmlFormatSummaryText: true,
+      ),
+    );
+
+    // ✅ NOTIFICATION DETAILS
+    final NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
+
+    // ✅ FORMAT PAYLOAD JIKA ADA - GUNAKAN FORMAT YANG LEBIH DETAIL
+    String? payloadString;
+    if (payload != null) {
+      payloadString = _formatDetailedPayload(payload);
+    } else {
+      // ✅ DEFAULT PAYLOAD JIKA TIDAK ADA
+      payloadString = _formatDetailedPayload({
+        'type': 'general',
+        'screen': 'dashboard', 
+        'title': title,
+        'body': body,
+        'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
+      });
+    }
+
+    // ✅ SHOW NOTIFICATION
+    await _notifications.show(id, title, body, details, payload: payloadString);
+    
+    print('🎉 SYSTEM NOTIFICATION BERHASIL: $title');
+    print('   → ID: $id');
+    print('   → Channel: $_channelId');
+    print('   → Body: $body');
+    print('   → Icon: ic_launcher (bulat putih)');
+    print('   → Payload: $payloadString');
+    
+  } catch (e) {
+    print('❌ ERROR showing system notification: $e');
+    
+    // ✅ FALLBACK: COBA TANPA ICON KUSTOM
+    await _showFallbackWithoutIcon(id, title, body, payload);
   }
+}
+
+// ✅ FALLBACK JIKA ICON ERROR
+Future<void> _showFallbackWithoutIcon(
+  int id, String title, String body, Map<String, dynamic>? payload) async {
+  try {
+    print('🔄 Trying fallback without custom icon...');
+    
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'ksmi_channel_id',
+      'KSMI Koperasi',
+      channelDescription: 'Notifikasi dari Koperasi KSMI',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      showWhen: true,
+      autoCancel: true,
+      // Biarkan Flutter pakai icon default
+    );
+
+    const NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+    );
+
+    String? payloadString;
+    if (payload != null) {
+      payloadString = _formatDetailedPayload(payload);
+    }
+
+    await _notifications.show(id, title, body, details, payload: payloadString);
+    
+    print('✅ Fallback notification shown (default icon)');
+  } catch (e) {
+    print('❌ Fallback notification also failed: $e');
+  }
+}
+
+// ✅ PERBAIKAN: FORMAT DETAILED PAYLOAD
+String _formatDetailedPayload(Map<String, dynamic> payload) {
+  try {
+    final List<String> parts = [];
+    payload.forEach((key, value) {
+      if (value != null) {
+        // ✅ ENCODE VALUE AGAR AMAN UNTUK URL
+        final encodedValue = value.toString().replaceAll('|', '_').replaceAll(':', '_');
+        parts.add('$key:$encodedValue');
+      }
+    });
+    return parts.join('|');
+  } catch (e) {
+    print('❌ Error formatting detailed payload: $e');
+    return 'type:general|screen:dashboard|title:KSMI Koperasi';
+  }
+}
 
   // ✅ FORMAT PAYLOAD UNTUK NOTIFICATION
   String _formatPayload(Map<String, dynamic> payload) {
