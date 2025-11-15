@@ -147,7 +147,7 @@ Future<void> showSystemNotification({
 
     print('📱 Preparing SYSTEM notification: $title');
 
-    // ✅ PERBAIKAN: ANDROID NOTIFICATION DETAILS DENGAN ICON
+    // ✅ PERBAIKAN: ANDROID NOTIFICATION DETAILS DENGAN ICON YANG BENAR
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       _channelId,
       _channelName,
@@ -158,8 +158,8 @@ Future<void> showSystemNotification({
       enableVibration: true,
       showWhen: true,
       autoCancel: true,
-      // ✅ TAMBAHKAN ICON - PAKAI ic_launcher.png YANG BULAT PUTIH
-      smallIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+      // ✅ PERBAIKAN: GUNAKAN ICON YANG BENAR UNTUK VERSI INI
+      icon: '@mipmap/ic_launcher', // ✅ GANTI smallIcon MENJADI icon
       largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       // ✅ TAMBAHKAN STYLE UNTUK NOTIFIKASI YANG LEBIH INFORMATIF
       styleInformation: BigTextStyleInformation(
@@ -204,7 +204,7 @@ Future<void> showSystemNotification({
     print('   → ID: $id');
     print('   → Channel: $_channelId');
     print('   → Body: $body');
-    print('   → Icon: ic_launcher (bulat putih)');
+    print('   → Icon: ic_launcher');
     print('   → Payload: $payloadString');
     
   } catch (e) {
@@ -347,172 +347,178 @@ String _formatDetailedPayload(Map<String, dynamic> payload) {
     }
   }
 
-  // ✅ UPDATE PROGRESS NOTIFICATION - FIXED VERSION
-  Future<void> updateProgressNotification({
-    required int id,
-    required String title,
-    required String body,
-    required int progress,
-    required int maxProgress,
-  }) async {
-    try {
-      if (!_isInitialized) return;
+// ✅ UPDATE PROGRESS NOTIFICATION - FIXED VERSION
+Future<void> updateProgressNotification({
+  required int id,
+  required String title,
+  required String body,
+  required int progress,
+  required int maxProgress,
+}) async {
+  try {
+    if (!_isInitialized) return;
 
-      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDescription,
-        importance: Importance.high,
-        priority: Priority.high,
-        showWhen: true,
-        autoCancel: progress >= maxProgress,
-        showProgress: true,
-        maxProgress: maxProgress,
-        progress: progress,
-        onlyAlertOnce: true,
-      );
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDescription,
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+      autoCancel: progress >= maxProgress,
+      showProgress: true,
+      maxProgress: maxProgress,
+      progress: progress,
+      onlyAlertOnce: true,
+      // ✅ TAMBAHKAN ICON
+      icon: '@mipmap/ic_launcher',
+    );
 
-      // ✅ FIX: HAPUS CONST DARI DARWINDETAILS KARENA ADA EXPRESSION
-      final iosDetails = DarwinNotificationDetails(
-        presentAlert: progress >= maxProgress,
-        presentBadge: progress >= maxProgress,
-        presentSound: progress >= maxProgress,
-      );
+    // ✅ FIX: HAPUS CONST DARI DARWINDETAILS KARENA ADA EXPRESSION
+    final iosDetails = DarwinNotificationDetails(
+      presentAlert: progress >= maxProgress,
+      presentBadge: progress >= maxProgress,
+      presentSound: progress >= maxProgress,
+    );
 
-      final NotificationDetails details = NotificationDetails(
-        android: androidDetails,
-        iOS: iosDetails,
-      );
+    final NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
 
-      await _notifications.show(id, title, body, details);
-      
-      if (progress >= maxProgress) {
-        print('✅ PROGRESS COMPLETED: $title');
-      } else {
-        print('🔄 PROGRESS UPDATE: $title - $progress/$maxProgress');
-      }
-      
-    } catch (e) {
-      print('❌ ERROR updating progress notification: $e');
+    await _notifications.show(id, title, body, details);
+    
+    if (progress >= maxProgress) {
+      print('✅ PROGRESS COMPLETED: $title');
+    } else {
+      print('🔄 PROGRESS UPDATE: $title - $progress/$maxProgress');
     }
+    
+  } catch (e) {
+    print('❌ ERROR updating progress notification: $e');
   }
+}
 
-  // ✅ SHOW BIG TEXT NOTIFICATION (Untuk pesan panjang)
-  Future<void> showBigTextNotification({
-    required int id,
-    required String title,
-    required String body,
-    required String bigText,
-    Map<String, dynamic>? payload,
-  }) async {
-    try {
-      if (!_isInitialized) {
-        await initialize();
-      }
-
-      print('📱 Preparing BIG TEXT notification: $title');
-
-      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDescription,
-        importance: Importance.high,
-        priority: Priority.high,
-        playSound: true,
-        enableVibration: true,
-        showWhen: true,
-        autoCancel: true,
-        styleInformation: BigTextStyleInformation(
-          bigText,
-          htmlFormatBigText: true,
-          contentTitle: title,
-          htmlFormatContentTitle: true,
-          summaryText: body,
-          htmlFormatSummaryText: true,
-        ),
-      );
-
-      final NotificationDetails details = NotificationDetails(
-        android: androidDetails,
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      );
-
-      String? payloadString;
-      if (payload != null) {
-        payloadString = _formatPayload(payload);
-      }
-
-      await _notifications.show(id, title, body, details, payload: payloadString);
-      
-      print('📖 BIG TEXT NOTIFICATION BERHASIL: $title');
-      
-    } catch (e) {
-      print('❌ ERROR showing big text notification: $e');
+// ✅ SHOW BIG TEXT NOTIFICATION (Untuk pesan panjang)
+Future<void> showBigTextNotification({
+  required int id,
+  required String title,
+  required String body,
+  required String bigText,
+  Map<String, dynamic>? payload,
+}) async {
+  try {
+    if (!_isInitialized) {
+      await initialize();
     }
-  }
 
-  // ✅ SCHEDULE NOTIFICATION (Untuk reminder)
-  Future<void> scheduleNotification({
-    required int id,
-    required String title,
-    required String body,
-    required DateTime scheduledDate,
-    Map<String, dynamic>? payload,
-  }) async {
-    try {
-      if (!_isInitialized) {
-        await initialize();
-      }
+    print('📱 Preparing BIG TEXT notification: $title');
 
-      print('📱 Scheduling notification: $title at $scheduledDate');
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDescription,
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      showWhen: true,
+      autoCancel: true,
+      // ✅ TAMBAHKAN ICON
+      icon: '@mipmap/ic_launcher',
+      styleInformation: BigTextStyleInformation(
+        bigText,
+        htmlFormatBigText: true,
+        contentTitle: title,
+        htmlFormatContentTitle: true,
+        summaryText: body,
+        htmlFormatSummaryText: true,
+      ),
+    );
 
-      final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDescription,
-        importance: Importance.high,
-        priority: Priority.high,
-        playSound: true,
-        enableVibration: true,
-      );
+    final NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
 
-      final NotificationDetails details = NotificationDetails(
-        android: androidDetails,
-        iOS: const DarwinNotificationDetails(
-          presentAlert: true,
-          presentBadge: true,
-          presentSound: true,
-        ),
-      );
-
-      String? payloadString;
-      if (payload != null) {
-        payloadString = _formatPayload(payload);
-      }
-
-      // ✅ CONVERT TO TZDateTime
-      final scheduledTZ = tz.TZDateTime.from(scheduledDate, tz.local);
-
-      await _notifications.zonedSchedule(
-        id,
-        title,
-        body,
-        scheduledTZ,
-        details,
-        payload: payloadString,
-        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-      );
-      
-      print('⏰ NOTIFICATION SCHEDULED: $title at $scheduledDate');
-      
-    } catch (e) {
-      print('❌ ERROR scheduling notification: $e');
+    String? payloadString;
+    if (payload != null) {
+      payloadString = _formatPayload(payload);
     }
+
+    await _notifications.show(id, title, body, details, payload: payloadString);
+    
+    print('📖 BIG TEXT NOTIFICATION BERHASIL: $title');
+    
+  } catch (e) {
+    print('❌ ERROR showing big text notification: $e');
   }
+}
+
+// ✅ SCHEDULE NOTIFICATION (Untuk reminder)
+Future<void> scheduleNotification({
+  required int id,
+  required String title,
+  required String body,
+  required DateTime scheduledDate,
+  Map<String, dynamic>? payload,
+}) async {
+  try {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    print('📱 Scheduling notification: $title at $scheduledDate');
+
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDescription,
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+      enableVibration: true,
+      // ✅ TAMBAHKAN ICON
+      icon: '@mipmap/ic_launcher',
+    );
+
+    final NotificationDetails details = NotificationDetails(
+      android: androidDetails,
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
+
+    String? payloadString;
+    if (payload != null) {
+      payloadString = _formatPayload(payload);
+    }
+
+    // ✅ CONVERT TO TZDateTime
+    final scheduledTZ = tz.TZDateTime.from(scheduledDate, tz.local);
+
+    await _notifications.zonedSchedule(
+      id,
+      title,
+      body,
+      scheduledTZ,
+      details,
+      payload: payloadString,
+      uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+    );
+    
+    print('⏰ NOTIFICATION SCHEDULED: $title at $scheduledDate');
+    
+  } catch (e) {
+    print('❌ ERROR scheduling notification: $e');
+  }
+}
 
   // ✅ TEST METHODS - DENGAN DELAY
   Future<void> testBasicNotification() async {

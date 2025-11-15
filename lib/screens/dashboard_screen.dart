@@ -1174,9 +1174,6 @@ Future<void> _refreshData() async {
       case MenuType.angsuran:
         _navigateToRiwayatAngsuran(context, userData);
         break;
-      case MenuType.saldo:
-        _showSaldoDetail(context);
-        break;
     }
   }
 
