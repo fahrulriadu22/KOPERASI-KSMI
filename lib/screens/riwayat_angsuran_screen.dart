@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:async';
 
 // ✅ CUSTOM SHAPE UNTUK APPBAR - DIPERBAIKI
 class NotchedAppBarShape extends ContinuousRectangleBorder {
@@ -56,249 +54,18 @@ class _RiwayatAngsuranScreenState extends State<RiwayatAngsuranScreen> {
   String _errorMessage = '';
   late String _selectedAngsuranType;
   List<Map<String, dynamic>> _angsuranTypes = [];
-  bool _hasCheckedAutoOpen = false;
-  Timer? _autoOpenTimer;
-  int _autoOpenRetryCount = 0;
 
   @override
   void initState() {
     super.initState();
+    
+    // ✅ SET INITIAL VALUE BERDASARKAN PARAMETER
     _selectedAngsuranType = 'semua';
+    
     _loadRiwayatAngsuran();
-    _startAutoOpenPolling(); // ✅ START POLLING SEJAK AWAL
-  }
-
-  @override
-  void dispose() {
-    _autoOpenTimer?.cancel();
-    super.dispose();
-  }
-
-    void _startAutoOpenPolling() {
-    print('🔄 Starting auto-open polling...');
-    
-    _autoOpenTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
-      if (_hasCheckedAutoOpen) {
-        timer.cancel();
-        print('✅ Auto-open polling stopped - already processed');
-        return;
-      }
-      
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final shouldAutoOpen = prefs.getBool('auto_open_angsuran_detail') ?? false;
-        
-        print('🔍 Polling check: shouldAutoOpen=$shouldAutoOpen, dataLoaded=${_riwayatAngsuran.isNotEmpty}, mounted=$mounted, retryCount=$_autoOpenRetryCount');
-        
-        if (shouldAutoOpen && _riwayatAngsuran.isNotEmpty && mounted) {
-          _autoOpenRetryCount++;
-          
-          // ✅ CEK APAKAH CONTEXT SUDAH READY
-          if (_isContextReadyForDialog()) {
-            _hasCheckedAutoOpen = true;
-            await prefs.setBool('auto_open_angsuran_detail', false);
-            timer.cancel();
-            
-            print('🎯 Context ready! Executing auto-open...');
-            
-            Future.delayed(const Duration(milliseconds: 300), () {
-              if (mounted) {
-                _executeAutoOpenDetail();
-              }
-            });
-          } else {
-            print('⏳ Context not ready yet, waiting... (retry $_autoOpenRetryCount)');
-            
-            // ✅ SAFETY: STOP SETELAH 10x RETRY (5 DETIK)
-            if (_autoOpenRetryCount >= 10) {
-              print('⚠️ Max retries reached, forcing auto-open...');
-              _hasCheckedAutoOpen = true;
-              await prefs.setBool('auto_open_angsuran_detail', false);
-              timer.cancel();
-              
-              Future.delayed(const Duration(milliseconds: 500), () {
-                if (mounted) {
-                  _executeAutoOpenDetail();
-                }
-              });
-            }
-          }
-        }
-      } catch (e) {
-        print('❌ Error in auto-open polling: $e');
-      }
-    });
-  }
-
-  // ✅ CEK APAKAH CONTEXT READY UNTUK SHOW DIALOG
-  bool _isContextReadyForDialog() {
-    try {
-      // Coba akses Navigator untuk test context readiness
-      final navigator = Navigator.of(context);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  // ✅ EXECUTE AUTO OPEN DETAIL
-  void _executeAutoOpenDetail() {
-    try {
-      if (_riwayatAngsuran.isEmpty) {
-        print('❌ No data to auto-open');
-        return;
-      }
-      
-      print('🔍 Executing auto-open detail...');
-      
-      // ✅ CARI ANGSURAN AKTIF
-      Map<String, dynamic>? targetAngsuran;
-      
-      for (var angsuran in _riwayatAngsuran) {
-        final status = angsuran['status']?.toString().toLowerCase();
-        final jumlah = (angsuran['jumlah'] as num?)?.toDouble() ?? 0;
-        
-        // ✅ PRIORITAS: STATUS AKTIF & ADA ANGSURAN
-        if (status == 'aktif' && jumlah > 0) {
-          targetAngsuran = angsuran;
-          break;
-        }
-      }
-      
-      // ✅ FALLBACK 1: CARI YANG BERJALAN
-      targetAngsuran ??= _riwayatAngsuran.firstWhere(
-        (angsuran) => angsuran['status']?.toString().toLowerCase() == 'berjalan',
-        orElse: () => _riwayatAngsuran.first,
-      );
-      
-      // ✅ FALLBACK 2: YANG PERTAMA SAJA
-      targetAngsuran ??= _riwayatAngsuran.first;
-      
-      print('🎯 Auto-opening: ${targetAngsuran['nama_barang']} - ${targetAngsuran['status']}');
-      
-      // ✅ PASTIKAN KITA DI BUILD CONTEXT YANG BENAR
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _showDetailAngsuran(targetAngsuran!);
-          print('✅ AUTO-OPEN SUCCESS: ${targetAngsuran!['nama_barang']}');
-        }
-      });
-      
-    } catch (e) {
-      print('❌ Error in executeAutoOpenDetail: $e');
-    }
-  }
-
-  // ✅ BACKUP CHECK UNTUK JAGA-JAGA
-  void _checkAutoOpenBackup() async {
-    if (_hasCheckedAutoOpen) return;
-    
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final shouldAutoOpen = prefs.getBool('auto_open_angsuran_detail') ?? false;
-      
-      if (shouldAutoOpen && _riwayatAngsuran.isNotEmpty && mounted) {
-        print('🔄 Backup check triggered!');
-        
-        // Tunggu sedikit lebih lama untuk backup
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          if (mounted && !_hasCheckedAutoOpen) {
-            _hasCheckedAutoOpen = true;
-            prefs.setBool('auto_open_angsuran_detail', false);
-            _executeAutoOpenDetail();
-          }
-        });
-      }
-    } catch (e) {
-      print('❌ Error in backup check: $e');
-    }
-  }
-
-
-    void _checkAutoOpenAfterLoad() async {
-    if (_hasCheckedAutoOpen) return;
-    
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final shouldAutoOpen = prefs.getBool('auto_open_angsuran_detail') ?? false;
-      
-      print('🔍 Checking auto-open flag: $shouldAutoOpen, Data loaded: ${_riwayatAngsuran.isNotEmpty}');
-      
-      if (shouldAutoOpen && _riwayatAngsuran.isNotEmpty && mounted) {
-        _hasCheckedAutoOpen = true;
-        await prefs.setBool('auto_open_angsuran_detail', false);
-        
-        print('🚀 Auto-open triggered! Waiting for UI...');
-        
-        // ✅ BERI WAKTU LEBIH LAMA UNTUK UI RENDER
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          if (mounted) {
-            print('🎯 Executing auto-open detail...');
-            _autoOpenFirstDetail();
-          }
-        });
-      }
-    } catch (e) {
-      print('❌ Error in auto-open check: $e');
-    }
-  }
-
-    // ✅ METHOD CEK AUTO OPEN DETAIL
-  Future<void> _checkAutoOpenDetail() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final shouldAutoOpen = prefs.getBool('auto_open_angsuran_detail') ?? false;
-      
-      if (shouldAutoOpen && mounted) {
-        // ✅ RESET FLAG DULU
-        await prefs.setBool('auto_open_angsuran_detail', false);
-        
-        // ✅ TUNGGU SEHINGGA UI RENDER SELESAI
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _riwayatAngsuran.isNotEmpty) {
-            _autoOpenFirstDetail();
-          }
-        });
-      }
-    } catch (e) {
-      print('❌ Error checking auto-open detail: $e');
-    }
-  }
-
-  // ✅ METHOD AUTO OPEN DETAIL PERTAMA
-  void _autoOpenFirstDetail() {
-    try {
-      if (_riwayatAngsuran.isEmpty) return;
-      
-      // ✅ CARI ANGSURAN AKTIF PERTAMA (BELUM LUNAS)
-      Map<String, dynamic>? targetAngsuran;
-      
-      for (var angsuran in _riwayatAngsuran) {
-        final status = angsuran['status']?.toString().toLowerCase();
-        if (status != 'lunas' && status != 'selesai') {
-          targetAngsuran = angsuran;
-          break;
-        }
-      }
-      
-      // ✅ JIKA TIDAK ADA YANG AKTIF, PAKAI YANG PERTAMA
-      targetAngsuran ??= _riwayatAngsuran.first;
-      
-      // ✅ TUNGGU SEBENTAR LAGI UNTUK MEMASTIKAN UI READY
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (mounted) {
-          _showDetailAngsuran(targetAngsuran!);
-          print('✅ Auto-opened detail for: ${targetAngsuran!['nama_barang']}');
-        }
-      });
-      
-    } catch (e) {
-      print('❌ Error auto-opening detail: $e');
-    }
   }
 
   // ✅ LOAD DATA DARI API
-  // ✅ MODIFIKASI LOAD DATA UNTUK BACKUP CHECK
   Future<void> _loadRiwayatAngsuran() async {
     if (mounted) {
       setState(() {
@@ -310,7 +77,12 @@ class _RiwayatAngsuranScreenState extends State<RiwayatAngsuranScreen> {
 
     try {
       print('🚀 Memulai load data dari getAlltaqsith API...');
+      
+      // ✅ PANGGIL API GETALLTAQSITH
       final result = await _apiService.getAlltaqsith();
+      
+      print('📊 Response getAlltaqsith: ${result['success']}');
+      print('📊 Message: ${result['message']}');
       
       if (mounted) {
         setState(() {
@@ -318,33 +90,32 @@ class _RiwayatAngsuranScreenState extends State<RiwayatAngsuranScreen> {
             final data = result['data'];
             final dataMaster = result['data_master'];
             
+            // ✅ SIMPAN DATA MASTER
             if (dataMaster is List && dataMaster.isNotEmpty) {
               _dataMaster = List<Map<String, dynamic>>.from(dataMaster);
+              print('✅ Berhasil load ${_dataMaster.length} data master');
             } else {
               _dataMaster = [];
+              print('⚠️ Data master kosong');
             }
             
+            // ✅ KONVERSI DATA DARI API
             if (data is List && data.isNotEmpty) {
               _riwayatAngsuran = _parseTaqsithData(data);
+              print('✅ Berhasil load ${_riwayatAngsuran.length} data pembiayaan');
+              
+              // ✅ GENERATE JENIS ANGSURAN DARI DATA YANG ADA
               _generateAngsuranTypes();
-              
-              print('✅ Data loaded: ${_riwayatAngsuran.length} items');
-              
-              // ✅ BACKUP CHECK: JIKA POLLING BELUM BERHASIL
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (!_hasCheckedAutoOpen && mounted) {
-                  _checkAutoOpenBackup();
-                }
-              });
-              
             } else {
               _riwayatAngsuran = [];
+              print('⚠️ Data pembiayaan kosong atau bukan list');
             }
           } else {
             _riwayatAngsuran = [];
             _dataMaster = [];
             _hasError = true;
             _errorMessage = result['message'] ?? 'Gagal memuat data pembiayaan';
+            print('❌ API Error: $_errorMessage');
           }
           _isLoading = false;
         });
