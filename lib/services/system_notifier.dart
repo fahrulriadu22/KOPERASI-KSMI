@@ -159,8 +159,7 @@ class SystemNotifier {
         enableVibration: true,
         showWhen: true,
         autoCancel: true,
-        icon: '@mipmap/ic_launcher_adaptive_fore', // ← LOGO DOANG
-        color: Colors.white, // ← BACKGROUND PUTIH
+        icon: '@mipmap/ic_launcer', // ← LOGO DOANG
       );
 
       // ✅ NOTIFICATION DETAILS
@@ -530,8 +529,7 @@ Future<void> showRealNotificationFromApi({
       enableVibration: true,
       showWhen: true,
       autoCancel: true,
-      icon: '@mipmap/ic_launcher_adaptive_fore', // ← LOGO DOANG
-      color: Colors.white, // ← BACKGROUND HIJAU
+      icon: '@mipmap/ic_launcher', // ← LOGO DOANG
       styleInformation: BigTextStyleInformation(
         formattedBody,
         htmlFormatBigText: true,
