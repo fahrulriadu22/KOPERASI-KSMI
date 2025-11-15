@@ -202,42 +202,58 @@ static void _backgroundCallbackDispatcher() {
     }
   }
 
-// ✅ PERBAIKAN: BACKGROUND HANDLER DENGAN PAYLOAD DETAILED
 @pragma('vm:entry-point')
 static Future<void> _firebaseBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print('📱 FCM BACKGROUND MESSAGE: ${message.data}');
   
-  // ✅ CEK PAYLOAD DARI BACKGROUND MESSAGE
+  print('📱 FCM BACKGROUND MESSAGE RECEIVED:');
+  print('   - Message ID: ${message.messageId}');
+  print('   - Notification: ${message.notification}');
+  print('   - Data Payload: ${message.data}');
+  
+  // ✅ EKSTRAK DETAIL SAMA SEPERTI FOREGROUND
   final notificationTitle = message.notification?.title;
   final notificationBody = message.notification?.body;
   final dataPayload = message.data;
   
-  print('🎯 Background FCM Details:');
-  print('   - Title: $notificationTitle');
-  print('   - Body: $notificationBody');
-  print('   - Data: $dataPayload');
-  
-  // ✅ GUNAKAN TITLE & BODY YANG BENAR
   final title = notificationTitle ?? dataPayload['title'] ?? 'KSMI Koperasi';
   final body = notificationBody ?? dataPayload['body'] ?? dataPayload['message'] ?? 'Pesan baru';
   
-  // ✅ AUTO SYNC DATA MESKI APP DI BACKGROUND
-  final service = FirebaseService();
-  await service._syncInboxData();
-  await service._syncUnreadCount();
+  final type = dataPayload['type'] ?? 'general';
+  final screen = dataPayload['screen'] ?? 'dashboard';
+  final transactionId = dataPayload['id'] ?? dataPayload['transaction_id'];
+  final amount = dataPayload['amount'] != null ? double.tryParse(dataPayload['amount'].toString()) : null;
   
-  // Simpan data notifikasi untuk dibuka nanti
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setString('pending_notification', jsonEncode({
-    'title': title,
-    'body': body,
-    'data': dataPayload,
-    'timestamp': DateTime.now().millisecondsSinceEpoch,
-  }));
+  print('🎯 Background Notification: $title - $body');
   
-  // Tampilkan system notification dengan payload yang benar
-  await _showDetailedSystemNotificationFromFCM(message, title, body);
+  // ✅ TAMPILKAN NOTIFIKASI LENGKAP DI BACKGROUND
+  try {
+    final notifier = SystemNotifier();
+    await notifier.initialize();
+    
+    await notifier.showRealNotificationFromApi(
+      title: title,
+      body: body,
+      type: type,
+      transactionId: transactionId,
+      amount: amount,
+      screen: screen,
+    );
+    
+    print('✅ Detailed background notification shown');
+  } catch (e) {
+    print('❌ Error showing background notification: $e');
+  }
+  
+  // ✅ AUTO SYNC DATA (OPTIONAL)
+  try {
+    final service = FirebaseService();
+    await service._syncInboxData();
+    await service._syncUnreadCount();
+    print('✅ Background data sync completed');
+  } catch (e) {
+    print('⚠️ Background sync failed: $e');
+  }
 }
 
 // ✅ CHECK PENDING NOTIFICATIONS SAAT APP DIBUKA
@@ -262,24 +278,36 @@ Future<void> checkPendingNotifications() async {
   }
 }
 
-// ✅ PERBAIKAN: REAL-TIME FOREGROUND MESSAGE HANDLER DENGAN PAYLOAD LENGKAP
 static Future<void> _firebaseForegroundHandler(RemoteMessage message) async {
   print('📱 FCM FOREGROUND MESSAGE: ${message.data}');
   
-  // ✅ CEK DETAILED PAYLOAD DARI FCM
+  // ✅ EKSTRAK DETAIL DARI FCM MESSAGE
   final notificationTitle = message.notification?.title;
   final notificationBody = message.notification?.body;
   final dataPayload = message.data;
   
-  print('🎯 FCM Notification Details:');
-  print('   - Title: $notificationTitle');
-  print('   - Body: $notificationBody');
-  print('   - Data: $dataPayload');
+  print('🎯 FCM Details:');
+  print('   - Notification Title: $notificationTitle');
+  print('   - Notification Body: $notificationBody');
+  print('   - Data Payload: $dataPayload');
   
-  // ✅ GUNAKAN TITLE & BODY DARI FCM JIKA ADA, JIKA TIDAK BARU PAKAI DEFAULT
+  // ✅ FORMAT TITLE & BODY YANG LENGKAP
   final title = notificationTitle ?? dataPayload['title'] ?? 'KSMI Koperasi';
   final body = notificationBody ?? dataPayload['body'] ?? dataPayload['message'] ?? 'Pesan baru';
   
+  // ✅ EKSTRAK TYPE DAN DETAIL LAIN
+  final type = dataPayload['type'] ?? 'general';
+  final screen = dataPayload['screen'] ?? 'dashboard';
+  final transactionId = dataPayload['id'] ?? dataPayload['transaction_id'];
+  final amount = dataPayload['amount'] != null ? double.tryParse(dataPayload['amount'].toString()) : null;
+  
+  print('🎯 Processed Notification:');
+  print('   - Final Title: $title');
+  print('   - Final Body: $body');
+  print('   - Type: $type');
+  print('   - Amount: $amount');
+  
+  // ✅ KIRIM KE STREAM
   final notificationData = {
     'title': title,
     'body': body,
@@ -287,39 +315,48 @@ static Future<void> _firebaseForegroundHandler(RemoteMessage message) async {
     'timestamp': DateTime.now().millisecondsSinceEpoch,
     'type': 'foreground',
     'messageId': message.messageId,
-    // ✅ TAMBAHKAN DETAIL LAINNYA DARI PAYLOAD
-    'notification_type': dataPayload['type'] ?? 'general',
-    'screen': dataPayload['screen'] ?? 'dashboard',
-    'id': dataPayload['id'] ?? '',
+    'notification_type': type,
+    'screen': screen,
+    'id': transactionId,
+    'amount': amount,
   };
   
-  print('🎯 Processed Notification:');
-  print('   - Final Title: $title');
-  print('   - Final Body: $body');
-  print('   - Type: ${notificationData['notification_type']}');
-  
-  // ✅ KIRIM KE STREAM UNTUK REAL-TIME UPDATE
   _instance._notificationStreamController.add(notificationData);
   
-  // Auto-increment unread count
+  // ✅ AUTO INCREMENT UNREAD COUNT
   final prefs = await SharedPreferences.getInstance();
   final currentCount = prefs.getInt('unread_notifications') ?? 0;
   final newCount = currentCount + 1;
   await prefs.setInt('unread_notifications', newCount);
-  
-  // ✅ KIRIM UPDATE UNREAD COUNT KE STREAM
   _instance._unreadCountStreamController.add(newCount);
   
-  // Trigger inbox sync
+  // ✅ TRIGGER SYNC
   _instance._syncInboxData();
   
-  // Notify callback
+  // ✅ TAMPILKAN NOTIFIKASI LENGKAP MENGGUNAKAN SystemNotifier
+  try {
+    final notifier = SystemNotifier();
+    await notifier.initialize();
+    
+    // ✅ PAKAI showRealNotificationFromApi UNTUK FORMAT YANG LENGKAP
+    await notifier.showRealNotificationFromApi(
+      title: title,
+      body: body,
+      type: type,
+      transactionId: transactionId,
+      amount: amount,
+      screen: screen,
+    );
+    
+    print('✅ Detailed foreground notification shown');
+  } catch (e) {
+    print('❌ Error showing detailed notification: $e');
+  }
+  
+  // ✅ TRIGGER CALLBACK
   if (onNotificationReceived != null) {
     onNotificationReceived!(notificationData);
   }
-  
-  // ✅ TAMPILKAN SYSTEM NOTIFICATION DENGAN TITLE & BODY YANG BENAR
-  await _showDetailedSystemNotificationFromFCM(message, title, body);
   
   print('✅ Foreground message processed, unread count: $newCount');
 }

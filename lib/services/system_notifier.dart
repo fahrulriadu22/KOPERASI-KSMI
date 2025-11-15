@@ -461,7 +461,6 @@ class SystemNotifier {
     );
   }
 
-  // ✅ TAMBAHIN METHOD INI DI SystemNotifier
 Future<void> showRealNotificationFromApi({
   required String title,
   required String body,
@@ -477,34 +476,44 @@ Future<void> showRealNotificationFromApi({
 
     print('📱 Preparing REAL notification from API: $title');
 
-    // ✅ FORMAT TITLE & BODY YANG LEBIH INFORMATIF
+    // ✅ FORMAT TITLE & BODY BERDASARKAN TYPE & DATA
     String formattedTitle = title;
     String formattedBody = body;
 
-    // ✅ FORMAT BERDASARKAN TYPE
-    switch (type) {
-      case 'transaction':
-        formattedTitle = '💳 Transaksi Berhasil - KSMI';
-        if (amount != null) {
-          formattedBody = 'Transaksi sebesar Rp ${amount.toStringAsFixed(0)} berhasil diproses';
-        }
-        break;
-      case 'inbox':
-        formattedTitle = '📨 Pesan Baru - KSMI';
-        formattedBody = 'Anda memiliki pesan baru di inbox KSMI';
-        break;
-      case 'angsuran':
-        formattedTitle = '📅 Pembayaran Angsuran - KSMI';
-        if (amount != null) {
-          formattedBody = 'Pembayaran angsuran sebesar Rp ${amount.toStringAsFixed(0)} berhasil';
-        }
-        break;
-      case 'tabungan':
-        formattedTitle = '💰 Setoran Tabungan - KSMI';
-        if (amount != null) {
-          formattedBody = 'Setoran tabungan sebesar Rp ${amount.toStringAsFixed(0)} berhasil';
-        }
-        break;
+    // ✅ JIKA AMOUNT ADA, FORMAT DENGAN RUPIAH
+    if (amount != null && amount > 0) {
+      final amountFormatted = 'Rp ${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}';
+      
+      switch (type) {
+        case 'transaction':
+          formattedTitle = '💳 Transaksi Berhasil - KSMI';
+          formattedBody = 'Transaksi sebesar $amountFormatted berhasil diproses';
+          break;
+        case 'angsuran':
+          formattedTitle = '📅 Pembayaran Angsuran - KSMI';
+          formattedBody = 'Pembayaran angsuran sebesar $amountFormatted berhasil';
+          break;
+        case 'tabungan':
+          formattedTitle = '💰 Setoran Tabungan - KSMI';
+          formattedBody = 'Setoran tabungan sebesar $amountFormatted berhasil';
+          break;
+        case 'penarikan':
+          formattedTitle = '💸 Penarikan Berhasil - KSMI';
+          formattedBody = 'Penarikan sebesar $amountFormatted berhasil diproses';
+          break;
+      }
+    } else {
+      // ✅ JIKA GAK ADA AMOUNT, PAKAI FORMAT GENERIC
+      switch (type) {
+        case 'inbox':
+          formattedTitle = '📨 Pesan Baru - KSMI';
+          formattedBody = body.isNotEmpty ? body : 'Anda memiliki pesan baru di inbox KSMI';
+          break;
+        case 'general':
+          formattedTitle = title.isNotEmpty ? title : 'KSMI Koperasi';
+          formattedBody = body.isNotEmpty ? body : 'Pesan baru dari KSMI';
+          break;
+      }
     }
 
     // ✅ PAYLOAD UNTUK NAVIGASI
@@ -512,12 +521,13 @@ Future<void> showRealNotificationFromApi({
       'type': type,
       'screen': screen ?? 'dashboard',
       'id': transactionId ?? DateTime.now().millisecondsSinceEpoch.toString(),
-      'title': title,
-      'body': body,
+      'title': formattedTitle,
+      'body': formattedBody,
       'timestamp': DateTime.now().toIso8601String(),
+      'amount': amount?.toString(),
     };
 
-    // ✅ PAKAI ic_launcher_adaptive_fore.png + BACKGROUND COLOR
+    // ✅ ANDROID DETAILS DENGAN ICON
     final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       _channelId,
       _channelName,
@@ -528,7 +538,7 @@ Future<void> showRealNotificationFromApi({
       enableVibration: true,
       showWhen: true,
       autoCancel: true,
-      icon: '@mipmap/ic_launcher', // ← LOGO DOANG
+      icon: '@mipmap/ic_launcher',
       styleInformation: BigTextStyleInformation(
         formattedBody,
         htmlFormatBigText: true,
@@ -548,15 +558,14 @@ Future<void> showRealNotificationFromApi({
       ),
     );
 
-    // ✅ GENERATE RANDOM ID UNTUK NOTIFIKASI
     final id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
-
     await _notifications.show(id, formattedTitle, formattedBody, details, payload: _formatPayload(payload));
     
-    print('🎉 REAL NOTIFICATION FROM API BERHASIL: $formattedTitle');
-    print('   → Type: $type');
+    print('🎉 REAL NOTIFICATION FROM API BERHASIL:');
+    print('   → Title: $formattedTitle');
     print('   → Body: $formattedBody');
-    print('   → Payload: $payload');
+    print('   → Type: $type');
+    print('   → Amount: $amount');
     
   } catch (e) {
     print('❌ ERROR showing real notification from API: $e');
