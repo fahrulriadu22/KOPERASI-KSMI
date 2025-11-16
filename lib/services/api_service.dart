@@ -11,6 +11,7 @@ import 'package:flutter/material.dart'; // UNTUK BuildContext
 import 'global_session_checker.dart'; // UNTUK GlobalSessionChecker
 import 'device_service.dart';
 import 'package:dio/dio.dart';
+import 'package:http/io_client.dart';
 
 class ApiService {
   static const String baseUrl = 'http://demo.bsdeveloper.id/api';
@@ -4366,167 +4367,45 @@ Future<Map<String, dynamic>> register(Map<String, dynamic> userData) async {
     }
   }
 
-// ✅ PERBAIKAN: GET ALL INBOX DENGAN DIO UNTUK STABILITAS LEBIH BAIK
 Future<Map<String, dynamic>> getAllInbox() async {
+  // ✅ BUAT CUSTOM HTTP CLIENT DENGAN SSL BYPASS (DEV ONLY)
+  final httpClient = HttpClient()
+    ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+  
+  final client = IOClient(httpClient);
+  
   try {
     final headers = await getProtectedHeaders();
     
-    print('📥 Getting all inbox data with DIO...');
-    print('🔗 URL: $baseUrl/transaction/getAllinbox');
-    print('📋 Headers: ${headers.keys}');
-
-    // ✅ GUNAKAN DIO DENGAN CONFIGURASI OPTIMAL
-    final dio = Dio(BaseOptions(
-      connectTimeout: const Duration(seconds: 30),
-      receiveTimeout: const Duration(seconds: 30),
-      sendTimeout: const Duration(seconds: 30),
+    print('📥 Getting inbox with IOClient...');
+    
+    final response = await client.post(
+      Uri.parse('$baseUrl/transaction/getAllinbox'),
       headers: {
         ...headers,
         'Connection': 'keep-alive',
-        'Accept': 'application/json',
-        'User-Agent': 'Koperasi-KSMI/1.0.0',
+        'Accept': '*/*', // ← PAKAI INI, BUKAN 'application/json'
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G973F) AppleWebKit/537.36', // ← PAKAI USER-AGENT REAL
       },
-    ));
+      body: '',
+    ).timeout(const Duration(seconds: 30));
 
-    final response = await dio.post(
-      '$baseUrl/transaction/getAllinbox',
-      data: '',
-      options: Options(
-        contentType: Headers.formUrlEncodedContentType,
-      ),
-    );
-
-    print('📡 DIO Response Status: ${response.statusCode}');
-    print('📡 DIO Response Headers: ${response.headers}');
-
+    client.close();
+    
+    print('📡 IOClient Response: ${response.statusCode}');
+    
     if (response.statusCode == 200) {
-      final data = response.data;
-      
-      print('📦 Raw API Response: $data');
-      
-      if (data['status'] == true) {
-        final responseData = data['data'] ?? {};
-        
-        print('✅ Inbox data loaded successfully with DIO');
-        print('📊 Inbox data structure: ${responseData.runtimeType}');
-        print('📊 Inbox data keys: ${responseData.keys}');
-        print('📊 Inbox data values: $responseData');
-        
-        // ✅ PROCESS DATA UNTUK FORMAT YANG BERBEDA-BEDA
-        List<Map<String, dynamic>> inboxList = [];
-        int unreadCount = 0;
-
-        // Format 1: Data langsung berupa list
-        if (responseData is List) {
-          inboxList = List<Map<String, dynamic>>.from(responseData);
-          print('📨 Format 1: Direct list with ${inboxList.length} items');
-        }
-        // Format 2: Data dalam key 'inbox'
-        else if (responseData['inbox'] is List) {
-          inboxList = List<Map<String, dynamic>>.from(responseData['inbox']);
-          unreadCount = responseData['belum_terbaca'] ?? 0;
-          print('📨 Format 2: Inbox list with ${inboxList.length} items, unread: $unreadCount');
-        }
-        // Format 3: Data dalam key 'data'
-        else if (responseData['data'] is List) {
-          inboxList = List<Map<String, dynamic>>.from(responseData['data']);
-          unreadCount = responseData['unread_count'] ?? responseData['belum_terbaca'] ?? 0;
-          print('📨 Format 3: Data list with ${inboxList.length} items, unread: $unreadCount');
-        }
-        // Format 4: Data dalam key 'messages'
-        else if (responseData['messages'] is List) {
-          inboxList = List<Map<String, dynamic>>.from(responseData['messages']);
-          unreadCount = responseData['unread'] ?? 0;
-          print('📨 Format 4: Messages list with ${inboxList.length} items, unread: $unreadCount');
-        }
-        // Format 5: Data kosong tapi ada unread count
-        else if (responseData is Map && responseData.containsKey('belum_terbaca')) {
-          unreadCount = responseData['belum_terbaca'] ?? 0;
-          print('📨 Format 5: Empty inbox with unread count: $unreadCount');
-        }
-        // Format 6: Data dalam format lain
-        else {
-          print('⚠️ Unknown inbox format: ${responseData.runtimeType}');
-          // Coba extract data apapun yang ada
-          if (responseData is Map) {
-            unreadCount = responseData['belum_terbaca'] ?? responseData['unread'] ?? 0;
-            print('📨 Format 6: Map data with unread: $unreadCount');
-          }
-        }
-        
-        // ✅ TAMBAHKAN ID JIKA TIDAK ADA
-        for (int i = 0; i < inboxList.length; i++) {
-          if (!inboxList[i].containsKey('id') && !inboxList[i].containsKey('id_inbox')) {
-            inboxList[i]['id'] = '${DateTime.now().millisecondsSinceEpoch}_$i';
-          }
-          
-          // ✅ TANDAI UNREAD JIKA ADA INFORMASI
-          if (!inboxList[i].containsKey('isUnread')) {
-            inboxList[i]['isUnread'] = unreadCount > i;
-          }
-        }
-        
-        final result = {
-          'success': true,
-          'data': responseData,
-          'inbox_list': inboxList,
-          'unread_count': unreadCount,
-          'total_count': inboxList.length,
-          'message': data['message'] ?? 'Success get inbox'
-        };
-        
-        print('🎉 FINAL INBOX RESULT WITH DIO:');
-        print('   → Success: ${result['success']}');
-        print('   → Total Items: ${result['total_count']}');
-        print('   → Unread Count: ${result['unread_count']}');
-        print('   → Message: ${result['message']}');
-        
-        return result;
-      } else {
-        print('❌ Inbox API status false: ${data['message']}');
-        return {
-          'success': false,
-          'message': data['message'] ?? 'Gagal mengambil data inbox',
-          'inbox_list': [],
-          'unread_count': 0,
-          'total_count': 0
-        };
-      }
-    } else {
-      print('❌ Inbox HTTP error: ${response.statusCode}');
-      print('❌ Inbox Response body: ${response.data}');
-
-      // ✅ HANDLE TOKEN EXPIRED HANYA JIKA 401
-      if (response.statusCode == 401) {
-        await _handleTokenExpired(null);
-      }
-
-      return {
-        'success': false,
-        'message': 'Gagal mengambil data inbox: ${response.statusCode}',
-        'inbox_list': [],
-        'unread_count': 0,
-        'total_count': 0
-      };
+      final data = jsonDecode(response.body);
+      print('✅ IOClient SUCCESS: $data');
+      return processInboxData(data);
     }
+    
   } catch (e) {
-    print('❌ DIO Inbox API Exception: $e');
-    
-    // ✅ DETAILED ERROR LOGGING UNTUK DIO
-    if (e is DioException) {
-      print('🌐 DIO Exception Type: ${e.type}');
-      print('🌐 DIO Exception Message: ${e.message}');
-      print('🌐 DIO Response: ${e.response?.data}');
-    }
-    
-    return {
-      'success': false,
-      'message': 'Error: $e',
-      'inbox_list': [],
-      'unread_count': 0,
-      'total_count': 0
-    };
+    print('❌ IOClient Error: $e');
+    client.close();
   }
+  
+  return fallbackInboxData();
 }
 
 // ✅ METHOD UNTUK PROCESS INBOX DATA UNTUK DASHBOARD

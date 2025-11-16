@@ -7,12 +7,21 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:725328966175:android:ebb62a990daf9ce8cf5b2a",
+        "mobilesdk_app_id": "1:725328966175:android:0d3ecc74a53d7ca6cf5b2a",
         "android_client_info": {
           "package_name": "com.ksmi.koperasi"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "725328966175-xxxxxxxxxxxxxxxx.apps.googleusercontent.com",
+          "client_type": 3,
+          "android_info": {
+            "package_name": "com.ksmi.koperasi",
+            "certificate_hash": "8b95219cf71b1d60b10518d58607fb4cbac7c4ae"
+          }
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyC9TCBqJtLT_QZIcl7GJV6dVMwTQbQ5unE"
