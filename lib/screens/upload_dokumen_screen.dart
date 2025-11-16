@@ -2311,7 +2311,7 @@ Widget build(BuildContext context) {
 
                     // BUKTI PEMBAYARAN CARD
                     _buildDokumenCard(
-                      type: 'bukti',
+                      type: 'bukti_pembayaran',
                       title: 'Bukti Pembayaran',
                       description: 'Foto bukti transfer sebesar Rp. 125.000,-\n• Untuk Simpanan Pokok (SIMPOK) ke\n• Bank Syariah Indonesia(BSI)\n• No Rekening: 333-667-66667\n•An. Koperasi Syirkah Muslim Indonesia',
                       icon: Icons.receipt,
