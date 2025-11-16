@@ -1122,6 +1122,24 @@ Future<void> _startUploadProcess() async {
   }
 }
 
+// Tambahkan di UploadDokumenScreen
+void _checkRealTimeStatus() async {
+  print('🔄 Checking real-time document status...');
+  
+  final userInfo = await _apiService.getUserInfo();
+  if (userInfo['success'] == true) {
+    setState(() {
+      _currentUser = userInfo['data'];
+    });
+    
+    print('🐛 === REAL-TIME STATUS ===');
+    print('📄 KTP: ${_currentUser['foto_ktp']}');
+    print('📄 KK: ${_currentUser['foto_kk']}');
+    print('📄 Diri: ${_currentUser['foto_diri']}');
+    print('💰 Bukti: ${_currentUser['foto_bukti']}');
+  }
+}
+
 // ✅ METHOD BARU: DAPATKAN USER DATA YANG VALID
 Future<Map<String, dynamic>> _getValidUserDataForUpload() async {
   try {
