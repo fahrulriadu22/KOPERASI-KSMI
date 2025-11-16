@@ -2161,7 +2161,7 @@ Widget build(BuildContext context) {
                       Container(width: 10, height: 2, color: (_isDocumentUploadedToServer('kk') || _storageService.hasKkFile) ? Colors.green : Colors.grey[300]),
                       _buildProgressStep(3, 'Diri', _isDocumentUploadedToServer('diri') || _storageService.hasDiriFile),
                       Container(width: 10, height: 2, color: (_isDocumentUploadedToServer('diri') || _storageService.hasDiriFile) ? Colors.green : Colors.grey[300]),
-                      _buildProgressStep(4, 'Bukti', _isDocumentUploadedToServer('bukti') || _storageService.hasBuktiPembayaran),
+                      _buildProgressStep(4, 'Bukti', _isDocumentUploadedToServer('bukti_pembayaran') || _storageService.hasBuktiPembayaran),
                       Container(width: 10, height: 2, color: (_isDocumentUploadedToServer('bukti_pembayaran') || _storageService.hasBuktiPembayaran) ? Colors.green : Colors.grey[300]),
                     ],
                   ),
