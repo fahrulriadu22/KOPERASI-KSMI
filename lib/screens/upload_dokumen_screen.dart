@@ -151,7 +151,7 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
       case 'diri':
         documentUrl = _currentUser['foto_diri'];
         break;
-      case 'bukti':
+      case 'bukti_pembayaran':
         documentUrl = _currentUser['foto_bukti'];
         break;
     }
@@ -226,7 +226,7 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
           case 'diri':
             await _storageService.setDiriFile(file);
             break;
-          case 'bukti':
+          case 'bukti_pembayaran':
             await _storageService.setBuktiPembayaranFile(file);
             break;
         }
@@ -298,7 +298,7 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
           case 'diri':
             await _storageService.setDiriFile(file);
             break;
-          case 'bukti':
+          case 'bukti_pembayaran':
             await _storageService.setBuktiPembayaranFile(file);
             break;
         }
@@ -398,7 +398,7 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
 
   // ✅ UPLOAD BUKTI PEMBAYARAN DARI KAMERA
   Future<void> _takePhotoBuktiPembayaran() async {
-    await _takePhoto('bukti', 'Bukti Pembayaran');
+    await _takePhoto('bukti_pembayaran', 'Bukti Pembayaran');
   }
 
   // ✅ PERBAIKAN: CLEAR FILE DENGAN SAFE CHECK
@@ -882,7 +882,7 @@ File? _getLocalFile(String type) {
       return _storageService.kkFile;
     case 'diri':
       return _storageService.diriFile;
-    case 'bukti':
+    case 'bukti_pembayaran':
       return _storageService.buktiPembayaranFile;
     default:
       return null;
@@ -1457,7 +1457,7 @@ void _navigateToProfileAfterUpload() {
                       case 'diri':
                         _takePhotoFotoDiri();
                         break;
-                      case 'bukti':
+                      case 'bukti_pembayaran':
                         _takePhotoBuktiPembayaran();
                         break;
                     }
@@ -1486,7 +1486,7 @@ void _navigateToProfileAfterUpload() {
                       case 'diri':
                         _uploadFotoDiri();
                         break;
-                      case 'bukti':
+                      case 'bukti_pembayaran':
                         _uploadBuktiPembayaran();
                         break;
                     }
@@ -2434,7 +2434,7 @@ Widget build(BuildContext context) {
         return _currentUser['foto_kk'];
       case 'diri':
         return _currentUser['foto_diri'];
-      case 'bukti':
+      case 'bukti_pembayaran':
         return _currentUser['foto_bukti'];
       default:
         return null;
