@@ -226,7 +226,7 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
           case 'diri':
             await _storageService.setDiriFile(file);
             break;
-          case 'bukti_pembayaran':
+          case 'bukti':
             await _storageService.setBuktiPembayaranFile(file);
             break;
         }
