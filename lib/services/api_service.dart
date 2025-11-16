@@ -4365,44 +4365,48 @@ Future<Map<String, dynamic>> register(Map<String, dynamic> userData) async {
     }
   }
 
-// ✅ PERBAIKAN: GET ALL INBOX DENGAN HTTP CLIENT YANG LEBIH BAIK
+// ✅ PERBAIKAN: GET ALL INBOX DENGAN DIO UNTUK STABILITAS LEBIH BAIK
 Future<Map<String, dynamic>> getAllInbox() async {
-  // ✅ GUNAKAN PERSISTENT CLIENT
-  final client = http.Client();
-  
   try {
     final headers = await getProtectedHeaders();
     
-    print('📥 Getting all inbox data...');
+    print('📥 Getting all inbox data with DIO...');
     print('🔗 URL: $baseUrl/transaction/getAllinbox');
     print('📋 Headers: ${headers.keys}');
 
-    // ✅ TAMBAH HEADER UNTUK STABILITY
-    final enhancedHeaders = {
-      ...headers,
-      'Connection': 'keep-alive',
-      'Accept': 'application/json',
-      'User-Agent': 'Koperasi-KSMI/1.0.0',
-    };
+    // ✅ GUNAKAN DIO DENGAN CONFIGURASI OPTIMAL
+    final dio = Dio(BaseOptions(
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
+      headers: {
+        ...headers,
+        'Connection': 'keep-alive',
+        'Accept': 'application/json',
+        'User-Agent': 'Koperasi-KSMI/1.0.0',
+      },
+    ));
 
-    final response = await client.post(
-      Uri.parse('$baseUrl/transaction/getAllinbox'),
-      headers: enhancedHeaders,
-      body: '',
-    ).timeout(const Duration(seconds: 30));
+    final response = await dio.post(
+      '$baseUrl/transaction/getAllinbox',
+      data: '',
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+      ),
+    );
 
-    print('📡 Inbox Response Status: ${response.statusCode}');
-    print('📡 Inbox Response Headers: ${response.headers}');
+    print('📡 DIO Response Status: ${response.statusCode}');
+    print('📡 DIO Response Headers: ${response.headers}');
 
     if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
+      final data = response.data;
       
       print('📦 Raw API Response: $data');
       
       if (data['status'] == true) {
         final responseData = data['data'] ?? {};
         
-        print('✅ Inbox data loaded successfully');
+        print('✅ Inbox data loaded successfully with DIO');
         print('📊 Inbox data structure: ${responseData.runtimeType}');
         print('📊 Inbox data keys: ${responseData.keys}');
         print('📊 Inbox data values: $responseData');
@@ -4470,7 +4474,7 @@ Future<Map<String, dynamic>> getAllInbox() async {
           'message': data['message'] ?? 'Success get inbox'
         };
         
-        print('🎉 FINAL INBOX RESULT:');
+        print('🎉 FINAL INBOX RESULT WITH DIO:');
         print('   → Success: ${result['success']}');
         print('   → Total Items: ${result['total_count']}');
         print('   → Unread Count: ${result['unread_count']}');
@@ -4489,7 +4493,7 @@ Future<Map<String, dynamic>> getAllInbox() async {
       }
     } else {
       print('❌ Inbox HTTP error: ${response.statusCode}');
-      print('❌ Inbox Response body: ${response.body}');
+      print('❌ Inbox Response body: ${response.data}');
 
       // ✅ HANDLE TOKEN EXPIRED HANYA JIKA 401
       if (response.statusCode == 401) {
@@ -4505,15 +4509,13 @@ Future<Map<String, dynamic>> getAllInbox() async {
       };
     }
   } catch (e) {
-    print('❌ Inbox API Exception: $e');
+    print('❌ DIO Inbox API Exception: $e');
     
-    // ✅ DETAILED ERROR LOGGING
-    if (e is SocketException) {
-      print('🌐 Socket Exception: ${e.message}');
-    } else if (e is TimeoutException) {
-      print('⏰ Timeout Exception: Request took too long');
-    } else if (e is http.ClientException) {
-      print('📡 Client Exception: ${e.message}');
+    // ✅ DETAILED ERROR LOGGING UNTUK DIO
+    if (e is DioException) {
+      print('🌐 DIO Exception Type: ${e.type}');
+      print('🌐 DIO Exception Message: ${e.message}');
+      print('🌐 DIO Response: ${e.response?.data}');
     }
     
     return {
@@ -4523,10 +4525,6 @@ Future<Map<String, dynamic>> getAllInbox() async {
       'unread_count': 0,
       'total_count': 0
     };
-  } finally {
-    // ✅ PASTIKAN CLIENT SELALU DICLOSE
-    client.close();
-    print('🔒 HTTP Client closed');
   }
 }
 
