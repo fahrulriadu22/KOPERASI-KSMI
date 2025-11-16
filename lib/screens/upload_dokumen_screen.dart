@@ -137,48 +137,55 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
     return true;
   }
 
-  // ✅ FIX: CEK STATUS DOKUMEN YANG LEBIH KETAT DAN AKURAT
-  bool _isDocumentUploadedToServer(String type) {
-    String? documentUrl;
-    
-    switch (type) {
-      case 'ktp':
-        documentUrl = _currentUser['foto_ktp'];
-        break;
-      case 'kk':
-        documentUrl = _currentUser['foto_kk'];
-        break;
-      case 'diri':
-        documentUrl = _currentUser['foto_diri'];
-        break;
-      case 'bukti_pembayaran':
-        documentUrl = _currentUser['foto_bukti'];
-        break;
-    }
-    
-    // ✅ FIX: VALIDASI YANG LEBIH KETAT
-    if (documentUrl == null || 
-        documentUrl.toString().isEmpty || 
-        documentUrl == 'null' ||
-        documentUrl == 'uploaded' ||
-        documentUrl.trim().isEmpty) {
-      return false;
-    }
-    
-    final urlString = documentUrl.toString().trim();
-    
-    // ✅ FIX: HANYA RETURN TRUE JIKA BENAR-BENAR ADA FILENAME DENGAN EXTENSION
-    final isUploaded = 
-        (urlString.toLowerCase().contains('.jpg') || 
-         urlString.toLowerCase().contains('.jpeg') || 
-         urlString.toLowerCase().contains('.png')) &&
-        urlString.length > 5 && // Pastikan bukan string pendek
-        !urlString.toLowerCase().contains('null') &&
-        !urlString.toLowerCase().contains('uploaded'); // Pastikan bukan status string
-    
-    print('🔍 Document $type: "$urlString" → Uploaded: $isUploaded');
-    return isUploaded;
+// ✅ PERBAIKAN: Validasi yang lebih smart
+bool _isDocumentUploadedToServer(String type) {
+  String? documentUrl;
+  
+  switch (type) {
+    case 'ktp':
+      documentUrl = _currentUser['foto_ktp'];
+      break;
+    case 'kk':
+      documentUrl = _currentUser['foto_kk'];
+      break;
+    case 'diri':
+      documentUrl = _currentUser['foto_diri'];
+      break;
+    case 'bukti':
+      documentUrl = _currentUser['foto_bukti'];
+      break;
   }
+  
+  print('🔍 DEBUG Server Status for $type: "$documentUrl"');
+  
+  // ✅ PERBAIKAN: Validasi yang lebih fleksibel
+  if (documentUrl == null || 
+      documentUrl.toString().isEmpty || 
+      documentUrl.toString().toLowerCase() == 'null') {
+    return false;
+  }
+  
+  // ✅ JIKA SERVER MENGEMBALIKAN 'uploaded', ANGGAP SUDAH TERUPLOAD
+  if (documentUrl.toString().toLowerCase() == 'uploaded') {
+    print('✅ Server confirms $type is uploaded');
+    return true;
+  }
+  
+  // ✅ CEK JIKA ADA URL/GAMBAR
+  final urlString = documentUrl.toString().trim();
+  final hasImageExtension = 
+      urlString.toLowerCase().contains('.jpg') || 
+      urlString.toLowerCase().contains('.jpeg') || 
+      urlString.toLowerCase().contains('.png') ||
+      urlString.toLowerCase().contains('.webp');
+  
+  final isUploaded = hasImageExtension && 
+      urlString.length > 3 && // Minimal ada karakter
+      !urlString.toLowerCase().contains('null');
+  
+  print('✅ $type uploaded status: $isUploaded');
+  return isUploaded;
+}
 
   // ✅ PERBAIKAN: UPLOAD DOKUMEN DENGAN SAFE CHECK
   Future<void> _uploadDocument(String type, String documentName) async {
