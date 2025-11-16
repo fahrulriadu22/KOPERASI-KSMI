@@ -36,12 +36,18 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
   bool _isNavigating = false;
   bool _isWidgetActive = true; 
 
-  @override
-  void initState() {
-    super.initState();
+@override
+void initState() {
+  super.initState();
+  _currentUser = Map<String, dynamic>.from(widget.user);
+  _initializeData();
+  
+  // ✅ JIKA _currentUser MASIH KOSONG, GUNAKAN DATA DARI WIDGET
+  if (_currentUser.isEmpty) {
     _currentUser = Map<String, dynamic>.from(widget.user);
-    _initializeData();
+    print('✅ Using widget user data as fallback');
   }
+}
 
   @override
   void dispose() {
@@ -50,38 +56,41 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
     super.dispose();
   }
 
-  // ✅ INITIALIZE DATA DENGAN CEK STATUS DOKUMEN DARI SERVER
-  Future<void> _initializeData() async {
+ Future<void> _initializeData() async {
+  try {
+    setState(() => _isInitializing = true);
+    
+    // ✅ LOAD TEMPORARY STORAGE DULU (YANG PASTI BERHASIL)
+    await _storageService.loadFilesFromStorage();
+    print('✅ TemporaryStorageService initialized');
+    
+    // ✅ COBA LOAD USER PROFILE, TAPI JANGAN BLOCK JIKA GAGAL
     try {
-      setState(() => _isInitializing = true);
-      
-      // ✅ CEK STATUS DOKUMEN DARI SERVER
       final profileResult = await _apiService.getUserProfile();
       if (profileResult['success'] == true && profileResult['data'] != null) {
         setState(() {
           _currentUser = profileResult['data'];
         });
-        print('✅ User profile loaded from API for document status check');
-        
-        // ✅ DEBUG: CEK STATUS DOKUMEN DI SERVER
+        print('✅ User profile loaded from API');
         _debugServerDocumentStatus();
+      } else {
+        print('⚠️ Failed to load profile, using empty data');
+        // Tetap lanjut dengan data kosong
       }
-      
-      // ✅ INITIALIZE TEMPORARY STORAGE
-      await _storageService.loadFilesFromStorage();
-      print('✅ TemporaryStorageService initialized');
-      _storageService.printDebugInfo();
-      
     } catch (e) {
-      print('❌ Error initializing data: $e');
-      // ✅ FALLBACK: GUNAKAN DATA LOKAL
-      await _storageService.loadFilesFromStorage();
-    } finally {
-      if (mounted && !_isNavigating) {
-        setState(() => _isInitializing = false);
-      }
+      print('⚠️ Profile load failed, continuing with empty data: $e');
+      // Jangan block aplikasi jika profile gagal
+    }
+    
+  } catch (e) {
+    print('❌ Error initializing data: $e');
+    // Tetap lanjut dengan data default
+  } finally {
+    if (mounted && !_isNavigating) {
+      setState(() => _isInitializing = false);
     }
   }
+}
 
   // ✅ FIX: DEBUG SERVER DOCUMENT STATUS
   void _debugServerDocumentStatus() {
@@ -138,6 +147,12 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
   }
 
 bool _isDocumentUploadedToServer(String type) {
+  // ✅ HANDLE JIKA _currentUser NULL
+  if (_currentUser == null || _currentUser.isEmpty) {
+    print('⚠️ _currentUser is null for $type check');
+    return false;
+  }
+  
   String? documentUrl;
   
   switch (type) {
@@ -164,11 +179,29 @@ bool _isDocumentUploadedToServer(String type) {
     return false;
   }
   
-  // ✅ JIKA ADA STRING APAPUN (termasuk 'uploaded'), ANGGAP SUDAH TERUPLOAD
+  // ✅ JIKA ADA STRING APAPUN, ANGGAP SUDAH TERUPLOAD
   final hasValue = documentUrl.toString().trim().isNotEmpty;
   
   print('✅ $type uploaded status: $hasValue');
   return hasValue;
+}
+
+// ✅ METHOD UNTUK MANUAL REFRESH SETELAH UPLOAD
+Future<void> _forceRefreshUserData() async {
+  try {
+    print('🔄 Force refreshing user data...');
+    
+    final userInfo = await _apiService.getUserInfo();
+    if (userInfo['success'] == true && userInfo['data'] != null) {
+      setState(() {
+        _currentUser = userInfo['data'];
+      });
+      print('✅ User data refreshed after upload');
+      _debugServerDocumentStatus();
+    }
+  } catch (e) {
+    print('❌ Force refresh failed: $e');
+  }
 }
 
 Future<void> _uploadDocument(String type, String documentName) async {
@@ -177,18 +210,18 @@ Future<void> _uploadDocument(String type, String documentName) async {
       source: ImageSource.gallery,
       maxWidth: 1200,
       maxHeight: 800,
-      imageQuality: 85,
+      imageQuality: 80,
     );
 
     if (pickedFile != null) {
-      // ✅ SOLUSI 3: CEK EXTENSION - HANYA JPG/JPEG
+      // ✅ JPG ONLY VALIDATION
       final fileExtension = pickedFile.path.toLowerCase().split('.').last;
       if (fileExtension != 'jpg' && fileExtension != 'jpeg') {
         _showSafeSnackBar(
-          'Hanya format JPG/JPEG yang didukung. File Anda: .$fileExtension\nSilakan pilih file JPG/JPEG lainnya.',
+          'Hanya format JPG/JPEG yang didukung! File Anda: .$fileExtension\nSilakan pilih file JPG lainnya.',
           isError: true
         );
-        return; // ✅ STOP JIKA BUKAN JPG
+        return;
       }
 
       final file = File(pickedFile.path);
@@ -199,12 +232,12 @@ Future<void> _uploadDocument(String type, String documentName) async {
         throw Exception('File tidak ditemukan');
       }
 
-      final fileSize = file.lengthSync();
-      if (fileSize > 5 * 1024 * 1024) {
-        throw Exception('Ukuran file terlalu besar. Maksimal 5MB.');
+      final fileSize = await file.length();
+      if (fileSize == 0) {
+        throw Exception('File kosong (0 bytes)');
       }
 
-      // ✅ SIMPAN FILE KE TEMPORARY STORAGE
+      // ✅ SIMPAN FILE ASLI
       switch (type) {
         case 'ktp':
           await _storageService.setKtpFile(file);
@@ -225,46 +258,40 @@ Future<void> _uploadDocument(String type, String documentName) async {
       }
 
       _showSafeSnackBar('$documentName berhasil disimpan ✅');
-      print('💾 $documentName saved to temporary storage');
+      print('💾 $documentName saved (JPG ASLI)');
       
       _checkAutoUpload();
     }
   } catch (e) {
-    if (mounted) {
-      setState(() {
-        _uploadError = 'Error upload $documentName: $e';
-      });
-    }
     print('❌ Upload failed: $e');
     _showSafeSnackBar('Gagal upload $documentName: $e', isError: true);
   }
 }
 
-Future<void> _takePhoto(String type, String documentName) async {
+Future<void> _uploadDocument(String type, String documentName) async {
   try {
     final XFile? pickedFile = await _imagePicker.pickImage(
-      source: ImageSource.camera,
+      source: ImageSource.gallery,
       maxWidth: 1200,
       maxHeight: 800,
-      imageQuality: 85,
+      imageQuality: 80,
     );
 
     if (pickedFile != null) {
-      // ✅ KAMERA SELALU PRODUCE JPG, jadi langsung pakai
+      // ✅ JPG ONLY VALIDATION
+      final fileExtension = pickedFile.path.toLowerCase().split('.').last;
+      if (fileExtension != 'jpg' && fileExtension != 'jpeg') {
+        _showSafeSnackBar(
+          'Hanya format JPG/JPEG! File Anda: .$fileExtension',
+          isError: true
+        );
+        return;
+      }
+
       final file = File(pickedFile.path);
-      print('📸 Taking photo for $documentName: ${file.path}');
+      print('📤 Uploading $documentName: ${file.path}');
       
-      // ✅ VALIDASI FILE KAMERA
-      if (!await file.exists()) {
-        throw Exception('File tidak ditemukan');
-      }
-
-      final fileSize = file.lengthSync();
-      if (fileSize > 5 * 1024 * 1024) {
-        throw Exception('Ukuran file terlalu besar. Maksimal 5MB.');
-      }
-
-      // ✅ SIMPAN FILE KE TEMPORARY STORAGE
+      // ✅ LANGSUNG PAKAI FILE ASLI
       switch (type) {
         case 'ktp':
           await _storageService.setKtpFile(file);
@@ -280,23 +307,11 @@ Future<void> _takePhoto(String type, String documentName) async {
           break;
       }
 
-      if (mounted) {
-        setState(() {});
-      }
-
-      _showSafeSnackBar('$documentName berhasil diambil ✅');
-      print('💾 $documentName from camera saved to temporary storage');
-      
+      _showSafeSnackBar('$documentName berhasil disimpan ✅');
       _checkAutoUpload();
     }
   } catch (e) {
-    if (mounted) {
-      setState(() {
-        _uploadError = 'Error mengambil foto $documentName: $e';
-      });
-    }
-    print('❌ Camera failed: $e');
-    _showSafeSnackBar('Gagal mengambil foto $documentName: $e', isError: true);
+    _showSafeSnackBar('Gagal upload $documentName: $e', isError: true);
   }
 }
 
@@ -1094,7 +1109,7 @@ Future<void> _startUploadProcess() async {
       );
 
       // ✅ REFRESH DATA SETELAH SUKSES
-      await _refreshUserData();
+      await _forceRefreshUserData();
 
       // ✅ NAVIGASI SETELAH DELAY
       Future.delayed(const Duration(milliseconds: 1500), () {
