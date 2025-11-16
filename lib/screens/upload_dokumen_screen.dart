@@ -494,7 +494,7 @@ void _showUploadConfirmationDialog() {
   );
 }
 
-// ✅ METHOD BARU: SIMPAN SEMUA FILE KE PERMANENT STORAGE
+// ✅ PERBAIKAN: SIMPAN SEMUA FILE KE PERMANENT STORAGE + UPDATE UI
 Future<void> _saveAllFilesToPermanentStorage() async {
   try {
     print('💾 SAVE ALL FILES TO PERMANENT STORAGE CALLED');
@@ -504,6 +504,13 @@ Future<void> _saveAllFilesToPermanentStorage() async {
     
     // ✅ VERIFIKASI LAGI DARI SCREEN INI
     await _verifyFilesAfterSave();
+    
+    // ✅ FORCE UPDATE UI - INI YANG PERLU DITAMBAHKAN!
+    if (mounted && !_isNavigating) {
+      setState(() {
+        print('🔄 FORCE UI UPDATE AFTER SAVE');
+      });
+    }
     
     print('🎯 ALL FILES SUCCESSFULLY SAVED TO PERMANENT STORAGE');
     
@@ -1507,8 +1514,7 @@ void _navigateToProfileAfterUpload() {
     );
   }
 
-  // ✅ BUILD DOKUMEN CARD dengan status dari TemporaryStorage + Server
-// ✅ PERBAIKAN: BUILD DOKUMEN CARD - TOMBOL LIHAT HANYA UNTUK FILE LOKAL
+// ✅ PERBAIKAN: BUILD DOKUMEN CARD DENGAN DEBUG
 Widget _buildDokumenCard({
   required String type,
   required String title,
@@ -1520,14 +1526,11 @@ Widget _buildDokumenCard({
   final hasLocalFile = fileInfo['exists'] == true;
   final isUploading = _storageService.isUploading;
   
-  // ✅ CEK STATUS UPLOAD KE SERVER (Hanya untuk info status)
-  final isUploadedToServer = _isDocumentUploadedToServer(type);
-  final serverUrl = _getDocumentServerUrl(type);
-
-  print('🎨 Building $type card - Server: $isUploadedToServer, Local: $hasLocalFile');
+  // ✅ DEBUG SETIAP CARD
+  print('🎨 Building $type card - Server: ${_isDocumentUploadedToServer(type)}, Local: $hasLocalFile, Path: ${fileInfo['path']}');
 
   // ✅ TOMBOL LIHAT HANYA MUNCUL JIKA ADA FILE LOKAL
-  final canViewFile = hasLocalFile; // ← HANYA LOKAL, TIDAK CEK SERVER
+  final canViewFile = hasLocalFile;
 
   return Card(
     elevation: 2,
@@ -1570,8 +1573,8 @@ Widget _buildDokumenCard({
                 ),
                 const SizedBox(height: 6),
                 
-                // ✅ STATUS INDICATOR (Tetap tampilkan status server)
-                if (isUploadedToServer) ...[
+                // ✅ STATUS INDICATOR
+                if (_isDocumentUploadedToServer(type)) ...[
                   Row(
                     children: [
                       Icon(Icons.cloud_done, color: Colors.green, size: 14),
@@ -1652,7 +1655,7 @@ Widget _buildDokumenCard({
                 child: ElevatedButton(
                   onPressed: isUploading ? null : () => _showImageSourceDialog(type, title),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isUploadedToServer ? Colors.green : 
+                    backgroundColor: _isDocumentUploadedToServer(type) ? Colors.green : 
                                   hasLocalFile ? Colors.orange : color,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
@@ -1670,7 +1673,7 @@ Widget _buildDokumenCard({
                           ),
                         )
                       : Text(
-                          isUploadedToServer ? '✓ Verified' : 
+                          _isDocumentUploadedToServer(type) ? '✓ Verified' : 
                           hasLocalFile ? 'Upload' : 'Pilih',
                           style: const TextStyle(fontSize: 12),
                         ),
@@ -1711,7 +1714,7 @@ Widget _buildDokumenCard({
               ],
               
               // HAPUS BUTTON (HANYA JIKA ADA FILE LOKAL DAN BELUM DI SERVER)
-              if (hasLocalFile && !isUploadedToServer) ...[
+              if (hasLocalFile && !_isDocumentUploadedToServer(type)) ...[
                 SizedBox(
                   width: 80,
                   height: 28,
