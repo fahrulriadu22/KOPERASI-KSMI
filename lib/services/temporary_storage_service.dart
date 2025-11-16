@@ -62,24 +62,44 @@ class TemporaryStorageService {
     return _ktpFile != null || _kkFile != null || _diriFile != null || _buktiTransferFile != null || _buktiPembayaranFile != null;
   }
 
-  // ✅ METHOD BARU: SET BUKTI PEMBAYARAN FILE (UNTUK UPLOAD DOKUMEN)
-  Future<void> setBuktiPembayaranFile(File file) async {
-    try {
-      print('🔄 Processing Bukti Pembayaran file...');
-      
-      await _validateFileBeforeProcessing(file, 'Bukti Pembayaran');
-      final convertedFile = await _autoConvertToJpg(file, 'Bukti Pembayaran');
-      
-      _buktiPembayaranFile = convertedFile;
+ Future<void> setBuktiPembayaranFile(File file) async {
+  try {
+    print('🔄 Processing Bukti Pembayaran file...');
+    
+    // ✅ VALIDASI FILE
+    await _validateFileBeforeProcessing(file, 'Bukti Pembayaran');
+    final convertedFile = await _autoConvertToJpg(file, 'Bukti Pembayaran');
+    
+    // ✅ SIMPAN KE MEMORY
+    _buktiPembayaranFile = convertedFile;
+    
+    // ✅ SIMPAN KE STORAGE - PASTIKAN INI DIPANGGIL
+    await _saveFileStatus('bukti_pembayaran', convertedFile.path);
+    
+    print('✅ Bukti Pembayaran file processed and SAVED: ${convertedFile.path}');
+    
+    // ✅ VERIFIKASI PENYIMPANAN
+    final prefs = await SharedPreferences.getInstance();
+    final savedPath = prefs.getString('temp_file_bukti_pembayaran');
+    final hasFile = prefs.getBool('has_file_bukti_pembayaran') ?? false;
+    
+    print('🔍 Save verification:');
+    print('   - Saved path: $savedPath');
+    print('   - Has file: $hasFile');
+    print('   - Expected: ${convertedFile.path}');
+    
+    if (savedPath != convertedFile.path || !hasFile) {
+      print('❌ Save verification FAILED! Retrying...');
+      // ✅ COBA SIMPAN ULANG JIKA GAGAL
       await _saveFileStatus('bukti_pembayaran', convertedFile.path);
-      
-      print('✅ Bukti Pembayaran file processed: ${convertedFile.path}');
-      _checkAndAutoUpload();
-    } catch (e) {
-      print('❌ Error processing Bukti Pembayaran file: $e');
-      rethrow;
     }
+    
+    _checkAndAutoUpload();
+  } catch (e) {
+    print('❌ Error processing Bukti Pembayaran file: $e');
+    rethrow;
   }
+}
 
   // ✅ METHOD BARU: SET BUKTI TRANSFER FILE (UNTUK RIIWAYAT TABUNGAN)
   Future<void> setBuktiTransferFile(File file) async {
@@ -98,6 +118,141 @@ class TemporaryStorageService {
       rethrow;
     }
   }
+
+Future<void> _commitBuktiPembayaranToStorage() async {
+  try {
+    print('💾 Committing bukti pembayaran to storage...');
+    
+    // ✅ CEK APAKAH ADA BUKTI PEMBAYARAN YANG BELUM DISIMPAN
+    if (hasBuktiPembayaran) {
+      final buktiFile = _buktiPembayaranFile;
+      if (buktiFile != null && await buktiFile.exists()) {
+        // ✅ FORCE SAVE KE STORAGE LAGI
+        await setBuktiPembayaranFile(buktiFile);
+        print('✅ Bukti pembayaran committed to storage');
+      }
+    }
+    
+    // ✅ CEK FILE LAIN JUGA
+    if (hasKtpFile) {
+      final ktpFile = _ktpFile;
+      if (ktpFile != null && await ktpFile.exists()) {
+        await setKtpFile(ktpFile);
+      }
+    }
+    
+    if (hasKkFile) {
+      final kkFile = _kkFile;
+      if (kkFile != null && await kkFile.exists()) {
+        await setKkFile(kkFile);
+      }
+    }
+    
+    if (hasDiriFile) {
+      final diriFile = _diriFile;
+      if (diriFile != null && await diriFile.exists()) {
+        await setDiriFile(diriFile);
+      }
+    }
+    
+    print('🎯 All files committed successfully');
+    
+  } catch (e) {
+    print('❌ Error committing files to storage: $e');
+  }
+}
+
+// ✅ METHOD BARU: COMMIT SEMUA FILE KE STORAGE PERMANEN
+Future<void> commitAllFilesToPermanentStorage() async {
+  try {
+    print('💾 COMMIT ALL FILES TO PERMANENT STORAGE STARTED...');
+    
+    int savedCount = 0;
+    
+    // ✅ COMMIT KTP
+    if (_ktpFile != null && await _ktpFile!.exists()) {
+      await setKtpFile(_ktpFile!);
+      savedCount++;
+      print('✅ KTP committed to permanent storage');
+    }
+    
+    // ✅ COMMIT KK
+    if (_kkFile != null && await _kkFile!.exists()) {
+      await setKkFile(_kkFile!);
+      savedCount++;
+      print('✅ KK committed to permanent storage');
+    }
+    
+    // ✅ COMMIT FOTO DIRI
+    if (_diriFile != null && await _diriFile!.exists()) {
+      await setDiriFile(_diriFile!);
+      savedCount++;
+      print('✅ Foto Diri committed to permanent storage');
+    }
+    
+    // ✅ COMMIT BUKTI PEMBAYARAN
+    if (_buktiPembayaranFile != null && await _buktiPembayaranFile!.exists()) {
+      await setBuktiPembayaranFile(_buktiPembayaranFile!);
+      savedCount++;
+      print('✅ Bukti Pembayaran committed to permanent storage');
+    }
+    
+    print('🎯 COMMIT COMPLETED: $savedCount files saved to permanent storage');
+    
+    // ✅ VERIFIKASI PENYIMPANAN
+    await _verifyStorageCommit();
+    
+  } catch (e) {
+    print('❌ ERROR committing files to permanent storage: $e');
+    throw Exception('Gagal menyimpan file: $e');
+  }
+}
+
+// ✅ METHOD BARU: VERIFIKASI PENYIMPANAN
+Future<void> _verifyStorageCommit() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    
+    print('🔍 STORAGE VERIFICATION:');
+    print('   - KTP: ${prefs.getBool('has_file_ktp')}');
+    print('   - KK: ${prefs.getBool('has_file_kk')}');
+    print('   - Diri: ${prefs.getBool('has_file_diri')}');
+    print('   - Bukti: ${prefs.getBool('has_file_bukti_pembayaran')}');
+    
+    // ✅ VERIFIKASI PATH MASING-MASING FILE
+    final ktpPath = prefs.getString('temp_file_ktp');
+    final kkPath = prefs.getString('temp_file_kk');
+    final diriPath = prefs.getString('temp_file_diri');
+    final buktiPath = prefs.getString('temp_file_bukti_pembayaran');
+    
+    print('📁 Saved paths:');
+    print('   - KTP: $ktpPath');
+    print('   - KK: $kkPath');
+    print('   - Diri: $diriPath');
+    print('   - Bukti: $buktiPath');
+    
+    // ✅ VERIFIKASI FILE EXISTS DI PATH TERSEBUT
+    if (ktpPath != null) {
+      final file = File(ktpPath);
+      print('   - KTP exists: ${await file.exists()}');
+    }
+    if (kkPath != null) {
+      final file = File(kkPath);
+      print('   - KK exists: ${await file.exists()}');
+    }
+    if (diriPath != null) {
+      final file = File(diriPath);
+      print('   - Diri exists: ${await file.exists()}');
+    }
+    if (buktiPath != null) {
+      final file = File(buktiPath);
+      print('   - Bukti exists: ${await file.exists()}');
+    }
+    
+  } catch (e) {
+    print('❌ Error during storage verification: $e');
+  }
+}
 
   // ✅ METHOD BARU: SET DUMMY BUKTI PATH
   Future<void> setDummyBuktiPath(String filePath) async {
@@ -478,85 +633,154 @@ class TemporaryStorageService {
     }
   }
 
-  // ✅ METHOD BARU: UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN
-  Future<Map<String, dynamic>> uploadAllFilesWithBuktiPembayaran() async {
-    if (!isAllFilesWithBuktiComplete) {
-      final missing = _getMissingFilesWithBukti();
-      return {
-        'success': false,
-        'message': 'Harap lengkapi semua 4 dokumen terlebih dahulu',
-        'missing_files': missing
-      };
-    }
+// ✅ PERBAIKAN BESAR: UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN
+Future<Map<String, dynamic>> uploadAllFilesWithBuktiPembayaran() async {
+  if (!isAllFilesWithBuktiComplete) {
+    final missing = _getMissingFilesWithBukti();
+    return {
+      'success': false,
+      'message': 'Harap lengkapi semua 4 dokumen terlebih dahulu',
+      'missing_files': missing
+    };
+  }
 
-    if (_isUploading) {
-      return {
-        'success': false, 
-        'message': 'Upload sedang berjalan, harap tunggu...'
-      };
-    }
+  if (_isUploading) {
+    return {
+      'success': false, 
+      'message': 'Upload sedang berjalan, harap tunggu...'
+    };
+  }
 
-    _isUploading = true;
+  _isUploading = true;
+  _uploadProgress = 0.0;
+  _uploadMessage = 'Mempersiapkan upload...';
+
+  try {
+    print('🚀 UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN STARTED');
+    print('📁 KTP: ${_ktpFile!.path}');
+    print('📁 KK: ${_kkFile!.path}');
+    print('📁 Foto Diri: ${_diriFile!.path}');
+    print('📁 Bukti Pembayaran: ${_buktiPembayaranFile!.path}');
+
+    // ✅ VALIDASI 4 FILE ASLI SEBELUM UPLOAD
+    await _validateFileBeforeUpload(_ktpFile!, 'KTP');
+    await _validateFileBeforeUpload(_kkFile!, 'KK');
+    await _validateFileBeforeUpload(_diriFile!, 'Foto Diri');
+    await _validateFileBeforeUpload(_buktiPembayaranFile!, 'Bukti Pembayaran');
+
+    // ✅ DAPATKAN USER DATA YANG VALID
+    final currentUser = await _getValidUserDataForUpload();
+    print('👤 User data for upload:');
+    print('   - user_id: ${currentUser['user_id']}');
+    print('   - user_key: ${currentUser['user_key']?.toString().substring(0, 10)}...');
+
+    // ✅ GUNAKAN API SERVICE YANG BARU UNTUK UPLOAD 4 FILE
+    final apiService = ApiService();
+    final result = await apiService.uploadFourDocumentsComplete(
+      fotoKtpPath: _ktpFile!.path,
+      fotoKkPath: _kkFile!.path,
+      fotoDiriPath: _diriFile!.path,
+      fotoBuktiPath: _buktiPembayaranFile!.path,
+      userData: currentUser, // ✅ KIRIM USER DATA YANG SUDAH VALIDASI
+    );
+
+    _isUploading = false;
     _uploadProgress = 0.0;
-    _uploadMessage = 'Mempersiapkan upload...';
+    _uploadMessage = '';
 
-    try {
-      print('🚀 UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN STARTED');
-      print('📁 KTP: ${_ktpFile!.path}');
-      print('📁 KK: ${_kkFile!.path}');
-      print('📁 Foto Diri: ${_diriFile!.path}');
-      print('📁 Bukti Pembayaran: ${_buktiPembayaranFile!.path}');
-
-      // ✅ VALIDASI 4 FILE ASLI SEBELUM UPLOAD
-      await _validateFileBeforeUpload(_ktpFile!, 'KTP');
-      await _validateFileBeforeUpload(_kkFile!, 'KK');
-      await _validateFileBeforeUpload(_diriFile!, 'Foto Diri');
-      await _validateFileBeforeUpload(_buktiPembayaranFile!, 'Bukti Pembayaran');
-
-      // ✅ GUNAKAN API SERVICE YANG BARU UNTUK UPLOAD 4 FILE
-      final apiService = ApiService();
-      final result = await apiService.uploadFourDocumentsComplete(
-        fotoKtpPath: _ktpFile!.path,
-        fotoKkPath: _kkFile!.path,
-        fotoDiriPath: _diriFile!.path,
-        fotoBuktiPath: _buktiPembayaranFile!.path,
-      );
-
-      _isUploading = false;
-      _uploadProgress = 0.0;
-      _uploadMessage = '';
-
-      if (result['success'] == true) {
-        print('🎉 UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN SUKSES!');
-        
-        // ✅ CLEANUP SETELAH SUKSES
-        await _cleanupAfterSuccessfulUploadWithBukti();
-        
-        return {
-          'success': true,
-          'message': result['message'] ?? 'Semua dokumen berhasil diupload',
-          'data': result['data']
-        };
-      } else {
-        print('❌ UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN FAILED: ${result['message']}');
-        return {
-          'success': false,
-          'message': result['message'] ?? 'Upload dokumen gagal',
-          'token_expired': result['token_expired'] ?? false
-        };
-      }
-    } catch (e) {
-      _isUploading = false;
-      _uploadProgress = 0.0;
-      _uploadMessage = 'Upload error: $e';
-      print('❌ UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN ERROR: $e');
+    if (result['success'] == true) {
+      print('🎉 UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN SUKSES!');
+      
+      // ✅ CLEANUP SETELAH SUKSES
+      await _cleanupAfterSuccessfulUploadWithBukti();
       
       return {
+        'success': true,
+        'message': result['message'] ?? 'Semua dokumen berhasil diupload',
+        'data': result['data']
+      };
+    } else {
+      print('❌ UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN FAILED: ${result['message']}');
+      return {
         'success': false,
-        'message': 'Upload error: $e'
+        'message': result['message'] ?? 'Upload dokumen gagal',
+        'token_expired': result['token_expired'] ?? false
       };
     }
+  } catch (e) {
+    _isUploading = false;
+    _uploadProgress = 0.0;
+    _uploadMessage = 'Upload error: $e';
+    print('❌ UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN ERROR: $e');
+    
+    return {
+      'success': false,
+      'message': 'Upload error: $e'
+    };
   }
+}
+
+// ✅ METHOD BARU: DAPATKAN USER DATA YANG VALID UNTUK UPLOAD
+Future<Map<String, dynamic>> _getValidUserDataForUpload() async {
+  try {
+    final apiService = ApiService();
+    
+    // ✅ COBA DAPATKAN DARI getCurrentUserForUpload() DULU
+    var currentUser = await apiService.getCurrentUserForUpload();
+    
+    print('🔍 Validating user data for upload...');
+    print('   - Initial user_id: ${currentUser?['user_id']}');
+    print('   - Initial user_key: ${currentUser?['user_key']}');
+    
+    // ✅ JIKA DATA TIDAK LENGKAP, COBA DARI getCurrentUser()
+    if (currentUser == null || 
+        currentUser['user_id'] == null || 
+        currentUser['user_key'] == null) {
+      
+      print('🔄 Falling back to getCurrentUser()...');
+      currentUser = await apiService.getCurrentUser();
+      
+      print('   - Fallback user_id: ${currentUser?['user_id']}');
+      print('   - Fallback user_key: ${currentUser?['user_key']}');
+    }
+    
+    // ✅ JIKA MASIH TIDAK LENGKAP, GUNAKAN SHARED PREFERENCES
+    if (currentUser == null || 
+        currentUser['user_id'] == null || 
+        currentUser['user_key'] == null) {
+      
+      print('🔄 Falling back to SharedPreferences...');
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      final userId = prefs.getString('user_id');
+      final userKey = prefs.getString('user_key');
+      
+      currentUser = {
+        'user_id': userId,
+        'user_key': userKey,
+        'token': token,
+      };
+      
+      print('   - Prefs user_id: $userId');
+      print('   - Prefs user_key: $userKey');
+    }
+    
+    // ✅ VALIDASI FINAL
+    if (currentUser == null || currentUser['user_id'] == null) {
+      throw Exception('Data user tidak lengkap. user_id: ${currentUser?['user_id']}, user_key: ${currentUser?['user_key']}');
+    }
+    
+    print('✅ User data validated:');
+    print('   - user_id: ${currentUser['user_id']}');
+    print('   - user_key: ${currentUser['user_key']?.toString().substring(0, 10)}...');
+    
+    return currentUser;
+    
+  } catch (e) {
+    print('❌ Error getting valid user data: $e');
+    rethrow;
+  }
+}
 
 // ✅ PERBAIKAN: UPLOAD BUKTI TRANSFER DENGAN 4 FILE SAMA DARI BUKTI TRANSFER
 Future<Map<String, dynamic>> uploadBuktiTransfer({

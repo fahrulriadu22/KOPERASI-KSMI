@@ -426,7 +426,7 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
     _showUploadConfirmationDialog();
   }
 
-// ✅ PERBAIKAN: DIALOG KONFIRMASI UPLOAD - FILE TETAP TERSIMPAN
+// ✅ PERBAIKAN: DIALOG KONFIRMASI UPLOAD - COMMIT FILE SEBELUM EDIT
 void _showUploadConfirmationDialog() {
   // ✅ HITUNG FILE YANG AKAN DIUPLOAD
   final filesToUpload = [
@@ -441,7 +441,7 @@ void _showUploadConfirmationDialog() {
   
   showDialog(
     context: context,
-    barrierDismissible: true, // ✅ BIARKAN USER TUTUP DENGAN TAP LUAR
+    barrierDismissible: true,
     builder: (context) => AlertDialog(
       title: const Row(
         children: [
@@ -467,11 +467,12 @@ void _showUploadConfirmationDialog() {
         ],
       ),
       actions: [
-        // ✅ TOMBOL "EDIT FILE DULU" - FILE TETAP TERSIMPAN
+        // ✅ PERBAIKAN: "EDIT FILE DULU" - COMMIT SEMUA FILE KE PERMANENT STORAGE
         TextButton(
-          onPressed: () {
+          onPressed: () async {
             Navigator.pop(context);
-            _showSafeSnackBar('File tetap tersimpan. Silakan edit jika perlu.');
+            await _saveAllFilesToPermanentStorage(); // ✅ INI YANG BARU!
+            _showSafeSnackBar('✅ Semua file berhasil disimpan. Silakan edit jika perlu.');
           },
           child: const Text('Edit File Dulu'),
         ),
@@ -479,7 +480,8 @@ void _showUploadConfirmationDialog() {
         ElevatedButton(
           onPressed: () {
             Navigator.pop(context);
-            _startUploadProcess(); // ← LANGSUNG UPLOAD!
+            _commitAllFilesToStorage(); // ✅ INI JUGA PERLU!
+            _startUploadProcess();
           },
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green,
@@ -489,6 +491,125 @@ void _showUploadConfirmationDialog() {
       ],
     ),
   );
+}
+
+// ✅ METHOD BARU: SIMPAN SEMUA FILE KE PERMANENT STORAGE
+Future<void> _saveAllFilesToPermanentStorage() async {
+  try {
+    print('💾 SAVE ALL FILES TO PERMANENT STORAGE CALLED');
+    
+    // ✅ GUNAKAN METHOD BARU DI TEMPORARY STORAGE SERVICE
+    await _storageService.commitAllFilesToPermanentStorage();
+    
+    // ✅ VERIFIKASI LAGI DARI SCREEN INI
+    await _verifyFilesAfterSave();
+    
+    print('🎯 ALL FILES SUCCESSFULLY SAVED TO PERMANENT STORAGE');
+    
+  } catch (e) {
+    print('❌ ERROR saving files to permanent storage: $e');
+    _showSafeSnackBar('Gagal menyimpan file: $e', isError: true);
+  }
+}
+
+// ✅ METHOD BARU: VERIFIKASI FILE SETELAH DISIMPAN
+Future<void> _verifyFilesAfterSave() async {
+  try {
+    print('🔍 VERIFYING FILES AFTER SAVE...');
+    
+    // ✅ RELOAD DARI STORAGE UNTUK MEMASTIKAN
+    await _storageService.loadFilesFromStorage();
+    
+    // ✅ CEK STATUS SETIAP FILE
+    final filesInfo = _storageService.getAllFilesInfo();
+    
+    print('📊 FILES STATUS AFTER SAVE:');
+    print('   - KTP: ${filesInfo['ktp']['exists']}');
+    print('   - KK: ${filesInfo['kk']['exists']}');
+    print('   - Diri: ${filesInfo['diri']['exists']}');
+    print('   - Bukti: ${filesInfo['bukti_pembayaran']['exists']}');
+    
+    // ✅ UPDATE UI JIKA MASIH MOUNTED
+    if (mounted && !_isNavigating) {
+      setState(() {});
+    }
+    
+  } catch (e) {
+    print('❌ Error during files verification: $e');
+  }
+}
+
+// ✅ METHOD BARU: DEBUG FILE YANG HILANG
+void _debugMissingFiles() {
+  print('🐛 === MISSING FILES DEBUG ===');
+  print('📄 KTP: ${_storageService.hasKtpFile}');
+  print('📄 KK: ${_storageService.hasKkFile}');
+  print('📄 Foto Diri: ${_storageService.hasDiriFile}');
+  print('💰 Bukti Pembayaran: ${_storageService.hasBuktiPembayaran}');
+  print('🎯 All Complete: ${_storageService.isAllFilesWithBuktiComplete}');
+  
+  // ✅ CEK PATH MASING-MASING FILE
+  if (!_storageService.hasKtpFile) print('❌ KTP path: ${_storageService.ktpFile?.path}');
+  if (!_storageService.hasKkFile) print('❌ KK path: ${_storageService.kkFile?.path}');
+  if (!_storageService.hasDiriFile) print('❌ Diri path: ${_storageService.diriFile?.path}');
+  if (!_storageService.hasBuktiPembayaran) print('❌ Bukti path: ${_storageService.buktiPembayaranFile?.path}');
+  
+  print('🐛 === DEBUG END ===');
+}
+
+// ✅ PERBAIKAN: COMMIT SEMUA FILE KE STORAGE (UNTUK UPLOAD DAN EDIT)
+Future<void> _commitAllFilesToStorage() async {
+  try {
+    print('💾 COMMIT ALL FILES TO STORAGE STARTED...');
+    
+    int savedCount = 0;
+    
+    // ✅ COMMIT SETIAP FILE DENGAN VALIDASI
+    if (_storageService.hasKtpFile) {
+      final file = _storageService.ktpFile!;
+      if (await file.exists()) {
+        await _storageService.setKtpFile(file);
+        savedCount++;
+        print('✅ KTP committed to storage');
+      }
+    }
+    
+    if (_storageService.hasKkFile) {
+      final file = _storageService.kkFile!;
+      if (await file.exists()) {
+        await _storageService.setKkFile(file);
+        savedCount++;
+        print('✅ KK committed to storage');
+      }
+    }
+    
+    if (_storageService.hasDiriFile) {
+      final file = _storageService.diriFile!;
+      if (await file.exists()) {
+        await _storageService.setDiriFile(file);
+        savedCount++;
+        print('✅ Foto Diri committed to storage');
+      }
+    }
+    
+    if (_storageService.hasBuktiPembayaran) {
+      final file = _storageService.buktiPembayaranFile!;
+      if (await file.exists()) {
+        await _storageService.setBuktiPembayaranFile(file);
+        savedCount++;
+        print('✅ Bukti Pembayaran committed to storage');
+      }
+    }
+    
+    print('🎯 COMMIT COMPLETED: $savedCount files saved');
+    
+    // ✅ VERIFIKASI DENGAN RELOAD
+    await _storageService.loadFilesFromStorage();
+    
+  } catch (e) {
+    print('❌ ERROR committing files: $e');
+    throw Exception('Gagal menyimpan file: $e');
+  }
 }
 
   // ✅ METHOD: PREVIEW IMAGE DENGAN ZOOM
@@ -945,7 +1066,7 @@ String _getTypeFromTitle(String title) {
     }
   }
 
-// ✅ PERBAIKAN: PROSES UPLOAD DENGAN ERROR HANDLING YANG LEBIH BAIK
+// ✅ PERBAIKAN BESAR: PROSES UPLOAD DENGAN USER DATA VALIDASI
 Future<void> _startUploadProcess() async {
   print('🚀 _startUploadProcess called');
   
@@ -963,9 +1084,22 @@ Future<void> _startUploadProcess() async {
   }
 
   try {
-    // ✅ VALIDASI FILE LOKAL
+    // ✅ COMMIT SEMUA FILE KE STORAGE SEBELUM VALIDASI
+    print('💾 Committing files to storage before upload...');
+    await _commitAllFilesToStorage();
+
+    // ✅ VALIDASI FILE LOKAL SETELAH COMMIT
     if (!_storageService.isAllFilesWithBuktiComplete) {
+      _debugMissingFiles();
       throw Exception('Semua file belum lengkap. KTP, KK, Foto Diri, dan Bukti Pembayaran harus diisi.');
+    }
+
+    // ✅ DAPATKAN USER DATA YANG VALID SEBELUM UPLOAD
+    print('👤 Getting valid user data for upload...');
+    final userData = await _getValidUserDataForUpload();
+    
+    if (userData['user_id'] == null || userData['user_key'] == null) {
+      throw Exception('Data user tidak lengkap. Silakan login ulang.');
     }
 
     // ✅ DAPATKAN PATH FILE LOKAL DENGAN VALIDASI
@@ -973,6 +1107,13 @@ Future<void> _startUploadProcess() async {
     final kkPath = _storageService.kkFile?.path;
     final diriPath = _storageService.diriFile?.path;
     final buktiPath = _storageService.buktiPembayaranFile?.path;
+
+    // ✅ DEBUG PATH FILE
+    print('🔍 File paths after commit:');
+    print('   - KTP: $ktpPath');
+    print('   - KK: $kkPath');
+    print('   - Diri: $diriPath');
+    print('   - Bukti: $buktiPath');
 
     if (ktpPath == null || kkPath == null || diriPath == null || buktiPath == null) {
       throw Exception('Path file tidak valid. Silakan pilih ulang file.');
@@ -990,14 +1131,19 @@ Future<void> _startUploadProcess() async {
     }
 
     print('📁 Starting upload for 4 files...');
+    print('👤 With user_id: ${userData['user_id']}');
     
-    // ✅ UPLOAD KE SERVER
-    final result = await _apiService.uploadFourDocumentsComplete(
-      fotoKtpPath: ktpPath,
-      fotoKkPath: kkPath,
-      fotoDiriPath: diriPath,
-      fotoBuktiPath: buktiPath,
-    );
+    // ✅ UPLOAD KE SERVER DENGAN USER DATA
+    final result = await _storageService.uploadAllFilesWithBuktiPembayaran();
+    
+    // ✅ ALTERNATIF: JIKA MASIH PAKAI API SERVICE LANGSUNG
+    // final result = await _apiService.uploadFourDocumentsComplete(
+    //   fotoKtpPath: ktpPath,
+    //   fotoKkPath: kkPath,
+    //   fotoDiriPath: diriPath,
+    //   fotoBuktiPath: buktiPath,
+    //   userData: userData,
+    // );
 
     print('📡 Upload result: ${result['success']}');
     
@@ -1036,7 +1182,14 @@ Future<void> _startUploadProcess() async {
     } else {
       final errorMsg = result['message'] ?? 'Upload gagal';
       print('❌ Upload failed: $errorMsg');
-      throw Exception(errorMsg);
+      
+      // ✅ CEK JIKA TOKEN EXPIRED
+      if (result['token_expired'] == true) {
+        _showSafeSnackBar('Sesi telah berakhir. Silakan login kembali.', isError: true);
+        // Bisa tambahkan logic logout di sini
+      } else {
+        throw Exception(errorMsg);
+      }
     }
     
   } catch (e) {
@@ -1051,6 +1204,58 @@ Future<void> _startUploadProcess() async {
       
       _showSafeSnackBar('Upload gagal: $e', isError: true, duration: 4);
     }
+  }
+}
+
+// ✅ METHOD BARU: DAPATKAN USER DATA YANG VALID
+Future<Map<String, dynamic>> _getValidUserDataForUpload() async {
+  try {
+    print('🔍 Getting valid user data for upload...');
+    
+    // ✅ COBA DARI CURRENT USER DI STATE
+    if (_currentUser.isNotEmpty && 
+        _currentUser['user_id'] != null && 
+        _currentUser['user_key'] != null) {
+      print('✅ Using current user from state');
+      return _currentUser;
+    }
+    
+    // ✅ COBA DARI API SERVICE
+    final userFromApi = await _apiService.getCurrentUserForUpload();
+    if (userFromApi != null && 
+        userFromApi['user_id'] != null && 
+        userFromApi['user_key'] != null) {
+      print('✅ Using user from API getCurrentUserForUpload()');
+      return userFromApi;
+    }
+    
+    // ✅ COBA DARI getCurrentUser() BIASA
+    final userFromApi2 = await _apiService.getCurrentUser();
+    if (userFromApi2 != null && 
+        userFromApi2['user_id'] != null && 
+        userFromApi2['user_key'] != null) {
+      print('✅ Using user from API getCurrentUser()');
+      return userFromApi2;
+    }
+    
+    // ✅ COBA DARI SHARED PREFERENCES
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('user_id');
+    final userKey = prefs.getString('user_key');
+    
+    if (userId != null && userKey != null) {
+      print('✅ Using user from SharedPreferences');
+      return {
+        'user_id': userId,
+        'user_key': userKey,
+      };
+    }
+    
+    throw Exception('Data user tidak ditemukan. user_id: $userId, user_key: $userKey');
+    
+  } catch (e) {
+    print('❌ Error getting valid user data: $e');
+    rethrow;
   }
 }
 

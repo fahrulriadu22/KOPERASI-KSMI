@@ -2641,7 +2641,7 @@ Map<String, dynamic> _getDokumenStatus(Map<String, dynamic> user) {
     }
   }
 
-// ✅ FIX: GET USER DATA DENGAN PRIORITAS DATA LOGIN
+// ✅ FIX: GET USER DATA DENGAN PRIORITAS DATA LOGIN + FALLBACK
 Future<Map<String, dynamic>?> getCurrentUserForUpload() async {
   try {
     final prefs = await SharedPreferences.getInstance();
@@ -2651,23 +2651,71 @@ Future<Map<String, dynamic>?> getCurrentUserForUpload() async {
     // ✅ PRIORITAS 1: CEK DATA LOGIN (YANG ADA user_id dan user_key)
     final loginUserString = prefs.getString('login_user');
     if (loginUserString != null && loginUserString.isNotEmpty) {
-      final loginData = jsonDecode(loginUserString);
-      if (loginData['user'] != null) {
-        final userData = loginData['user'];
-        print('✅ Using login user data:');
-        print('   - user_id: ${userData['user_id']}');
-        print('   - user_key: ${userData['user_key']?.substring(0, 10)}...');
-        return userData;
+      try {
+        final loginData = jsonDecode(loginUserString);
+        if (loginData['user'] != null) {
+          final userData = loginData['user'];
+          
+          // ✅ VALIDASI DATA LENGKAP
+          if (userData['user_id'] != null && userData['user_key'] != null) {
+            print('✅ Using login user data:');
+            print('   - user_id: ${userData['user_id']}');
+            print('   - user_key: ${userData['user_key']?.toString().substring(0, 10)}...');
+            return userData;
+          } else {
+            print('⚠️ Login data exists but missing user_id or user_key');
+          }
+        }
+      } catch (e) {
+        print('❌ Error parsing login_user: $e');
       }
     }
     
-    // ✅ PRIORITAS 2: CEK USER DATA BIASA
+    // ✅ PRIORITAS 2: CEK USER DATA BIASA + TOKEN
     final userString = prefs.getString('user');
+    final token = prefs.getString('token');
+    
     if (userString != null && userString.isNotEmpty) {
-      final userData = jsonDecode(userString);
-      print('⚠️ Using regular user data (may lack user_id/user_key):');
-      print('   - Available keys: ${userData.keys}');
-      return userData;
+      try {
+        final userData = jsonDecode(userString);
+        
+        // ✅ COBA PERBAIKI DATA YANG KURANG
+        final fixedUserData = Map<String, dynamic>.from(userData);
+        
+        // ✅ TAMBAHKAN user_key DARI TOKEN JIKA TIDAK ADA
+        if (fixedUserData['user_key'] == null && token != null) {
+          fixedUserData['user_key'] = token;
+          print('🔧 Added user_key from token');
+        }
+        
+        // ✅ TAMBAHKAN user_id JIKA TIDAK ADA
+        if (fixedUserData['user_id'] == null) {
+          fixedUserData['user_id'] = fixedUserData['id'] ?? 
+                                    fixedUserData['userid'] ?? 
+                                    'temp_user_${DateTime.now().millisecondsSinceEpoch}';
+          print('🔧 Added user_id as temp');
+        }
+        
+        // ✅ VALIDASI FINAL
+        if (fixedUserData['user_id'] != null && fixedUserData['user_key'] != null) {
+          print('⚠️ Using fixed user data:');
+          print('   - user_id: ${fixedUserData['user_id']}');
+          print('   - user_key: ${fixedUserData['user_key']?.toString().substring(0, 10)}...');
+          return fixedUserData;
+        }
+      } catch (e) {
+        print('❌ Error parsing user data: $e');
+      }
+    }
+    
+    // ✅ PRIORITAS 3: CEK TOKEN SAJA
+    if (token != null && token.isNotEmpty) {
+      print('⚠️ Only token available, creating minimal user data');
+      return {
+        'user_id': 'temp_user_${DateTime.now().millisecondsSinceEpoch}',
+        'user_key': token,
+        'token': token,
+      };
     }
     
     print('❌ No user data found in storage');
@@ -2751,7 +2799,7 @@ Future<void> saveLoginData(Map<String, dynamic> loginResponse) async {
     }
   }
 
-// Di api_service.dart - method login
+// Di api_service.dart - method login - PERBAIKI INI!
 Future<Map<String, dynamic>> login(String username, String password) async {
   try {
     final headers = getAuthHeaders();
@@ -2765,6 +2813,7 @@ Future<Map<String, dynamic>> login(String username, String password) async {
     ).timeout(const Duration(seconds: 30));
 
     print('📡 Login Response Status: ${response.statusCode}');
+    print('📡 Login Response Body: ${response.body}'); // ✅ TAMBAH INI!
 
     if (response.statusCode == 200 || response.statusCode == 400) {
       final data = jsonDecode(response.body);
@@ -2774,6 +2823,7 @@ Future<Map<String, dynamic>> login(String username, String password) async {
         final userKey = data['user_key'].toString();
         final userId = data['user_id']?.toString() ?? '';
         
+        // ✅ BUAT USER DATA YANG LENGKAP
         final userData = {
           'user_id': data['user_id'],
           'user_name': data['user_name'],
@@ -2784,8 +2834,20 @@ Future<Map<String, dynamic>> login(String username, String password) async {
         };
 
         final prefs = await SharedPreferences.getInstance();
+        
+        // ✅ SIMPAN KE SEMUA LOKASI UNTUK BACKUP
         await prefs.setString('token', userKey);
         await prefs.setString('user', jsonEncode(userData));
+        
+        // ✅ ✅ ✅ INI YANG PERLU DITAMBAHKAN!
+        // SIMPAN SEBAGAI login_user UNTUK getCurrentUserForUpload()
+        final loginResponse = {
+          'token': userKey,
+          'user': userData,
+          'status': true,
+          'message': data['message'] ?? 'Login berhasil'
+        };
+        await prefs.setString('login_user', jsonEncode(loginResponse));
         
         // ✅ SIMPAN KE DeviceService
         if (userId.isNotEmpty) {
@@ -2808,6 +2870,7 @@ Future<Map<String, dynamic>> login(String username, String password) async {
         }
         
         print('✅ Login successful for user: ${data['user_name']}');
+        print('💾 Data saved to: token, user, login_user');
         
         return {
           'success': true,
