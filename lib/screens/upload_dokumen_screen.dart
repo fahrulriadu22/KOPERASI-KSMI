@@ -7,6 +7,7 @@ import 'aktivasi_berhasil_screen.dart';
 import 'dashboard_main.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:photo_view/photo_view.dart';
 
 class UploadDokumenScreen extends StatefulWidget {
@@ -1066,7 +1067,7 @@ String _getTypeFromTitle(String title) {
     }
   }
 
-// ✅ PERBAIKAN BESAR: PROSES UPLOAD DENGAN USER DATA VALIDASI
+// ✅ PERBAIKAN: PROSES UPLOAD YANG LEBIH SIMPLE DAN AMAN
 Future<void> _startUploadProcess() async {
   print('🚀 _startUploadProcess called');
   
@@ -1075,7 +1076,7 @@ Future<void> _startUploadProcess() async {
     return;
   }
 
-  // ✅ SET LOADING STATE DENGAN SAFE CHECK
+  // ✅ SET LOADING STATE
   if (mounted) {
     setState(() {
       _isLoading = true;
@@ -1084,95 +1085,40 @@ Future<void> _startUploadProcess() async {
   }
 
   try {
-    // ✅ COMMIT SEMUA FILE KE STORAGE SEBELUM VALIDASI
-    print('💾 Committing files to storage before upload...');
+    // ✅ COMMIT FILE KE STORAGE
+    print('💾 Committing files to storage...');
     await _commitAllFilesToStorage();
 
-    // ✅ VALIDASI FILE LOKAL SETELAH COMMIT
+    // ✅ VALIDASI FILE LENGKAP
     if (!_storageService.isAllFilesWithBuktiComplete) {
       _debugMissingFiles();
-      throw Exception('Semua file belum lengkap. KTP, KK, Foto Diri, dan Bukti Pembayaran harus diisi.');
-    }
-
-    // ✅ DAPATKAN USER DATA YANG VALID SEBELUM UPLOAD
-    print('👤 Getting valid user data for upload...');
-    final userData = await _getValidUserDataForUpload();
-    
-    if (userData['user_id'] == null || userData['user_key'] == null) {
-      throw Exception('Data user tidak lengkap. Silakan login ulang.');
-    }
-
-    // ✅ DAPATKAN PATH FILE LOKAL DENGAN VALIDASI
-    final ktpPath = _storageService.ktpFile?.path;
-    final kkPath = _storageService.kkFile?.path;
-    final diriPath = _storageService.diriFile?.path;
-    final buktiPath = _storageService.buktiPembayaranFile?.path;
-
-    // ✅ DEBUG PATH FILE
-    print('🔍 File paths after commit:');
-    print('   - KTP: $ktpPath');
-    print('   - KK: $kkPath');
-    print('   - Diri: $diriPath');
-    print('   - Bukti: $buktiPath');
-
-    if (ktpPath == null || kkPath == null || diriPath == null || buktiPath == null) {
-      throw Exception('Path file tidak valid. Silakan pilih ulang file.');
-    }
-
-    // ✅ VALIDASI FILE EXISTS
-    final ktpFile = File(ktpPath);
-    final kkFile = File(kkPath);
-    final diriFile = File(diriPath);
-    final buktiFile = File(buktiPath);
-
-    if (!await ktpFile.exists() || !await kkFile.exists() || 
-        !await diriFile.exists() || !await buktiFile.exists()) {
-      throw Exception('File tidak ditemukan. Silakan upload ulang.');
+      throw Exception('Semua 4 file belum lengkap');
     }
 
     print('📁 Starting upload for 4 files...');
-    print('👤 With user_id: ${userData['user_id']}');
     
-    // ✅ UPLOAD KE SERVER DENGAN USER DATA
+    // ✅ LANGSUNG GUNAKAN METHOD DARI TEMPORARY STORAGE SERVICE
     final result = await _storageService.uploadAllFilesWithBuktiPembayaran();
-    
-    // ✅ ALTERNATIF: JIKA MASIH PAKAI API SERVICE LANGSUNG
-    // final result = await _apiService.uploadFourDocumentsComplete(
-    //   fotoKtpPath: ktpPath,
-    //   fotoKkPath: kkPath,
-    //   fotoDiriPath: diriPath,
-    //   fotoBuktiPath: buktiPath,
-    //   userData: userData,
-    // );
 
-    print('📡 Upload result: ${result['success']}');
+    print('📡 Upload result: ${result['success']} - ${result['message']}');
     
-    // ✅ HANDLE RESPONSE DENGAN SAFE CHECK
-    if (!_isWidgetActive || !mounted) {
-      print('⚠️ Widget not active after upload, skipping state update');
-      return;
-    }
+    // ✅ HANDLE RESPONSE
+    if (!_isWidgetActive || !mounted) return;
 
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
 
     if (result['success'] == true) {
       print('✅ Upload successful!');
       
-      // ✅ CLEAR TEMPORARY STORAGE SETELAH UPLOAD BERHASIL
-      await _storageService.clearAllFiles();
-      
-      // ✅ REFRESH USER DATA
-      await _refreshUserData();
-
-      // ✅ TAMPILKAN SUKSES MESSAGE
       _showSafeSnackBar(
         '✅ Upload berhasil! Dokumen sedang diverifikasi admin.',
         duration: 4
       );
 
-      // ✅ TUNGGU SEBENTAR LALU KE PROFILE
+      // ✅ REFRESH DATA SETELAH SUKSES
+      await _refreshUserData();
+
+      // ✅ NAVIGASI SETELAH DELAY
       Future.delayed(const Duration(milliseconds: 1500), () {
         if (_isWidgetActive && mounted) {
           _navigateToProfileAfterUpload();
@@ -1181,21 +1127,12 @@ Future<void> _startUploadProcess() async {
       
     } else {
       final errorMsg = result['message'] ?? 'Upload gagal';
-      print('❌ Upload failed: $errorMsg');
-      
-      // ✅ CEK JIKA TOKEN EXPIRED
-      if (result['token_expired'] == true) {
-        _showSafeSnackBar('Sesi telah berakhir. Silakan login kembali.', isError: true);
-        // Bisa tambahkan logic logout di sini
-      } else {
-        throw Exception(errorMsg);
-      }
+      throw Exception(errorMsg);
     }
     
   } catch (e) {
     print('❌ Upload process error: $e');
     
-    // ✅ HANDLE ERROR DENGAN SAFE CHECK
     if (_isWidgetActive && mounted) {
       setState(() {
         _isLoading = false;

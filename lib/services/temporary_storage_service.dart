@@ -633,7 +633,7 @@ Future<void> _verifyStorageCommit() async {
     }
   }
 
-// ✅ PERBAIKAN BESAR: UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN
+// ✅ PERBAIKAN: UPLOAD 4 FILE ASLI DENGAN BUKTI PEMBAYARAN (SIMPLE VERSION)
 Future<Map<String, dynamic>> uploadAllFilesWithBuktiPembayaran() async {
   if (!isAllFilesWithBuktiComplete) {
     final missing = _getMissingFilesWithBukti();
@@ -662,26 +662,19 @@ Future<Map<String, dynamic>> uploadAllFilesWithBuktiPembayaran() async {
     print('📁 Foto Diri: ${_diriFile!.path}');
     print('📁 Bukti Pembayaran: ${_buktiPembayaranFile!.path}');
 
-    // ✅ VALIDASI 4 FILE ASLI SEBELUM UPLOAD
+    // ✅ VALIDASI FILE SEBELUM UPLOAD
     await _validateFileBeforeUpload(_ktpFile!, 'KTP');
     await _validateFileBeforeUpload(_kkFile!, 'KK');
     await _validateFileBeforeUpload(_diriFile!, 'Foto Diri');
     await _validateFileBeforeUpload(_buktiPembayaranFile!, 'Bukti Pembayaran');
 
-    // ✅ DAPATKAN USER DATA YANG VALID
-    final currentUser = await _getValidUserDataForUpload();
-    print('👤 User data for upload:');
-    print('   - user_id: ${currentUser['user_id']}');
-    print('   - user_key: ${currentUser['user_key']?.toString().substring(0, 10)}...');
-
-    // ✅ GUNAKAN API SERVICE YANG BARU UNTUK UPLOAD 4 FILE
+    // ✅ LANGSUNG GUNAKAN API SERVICE TANPA USER DATA COMPLEX
     final apiService = ApiService();
     final result = await apiService.uploadFourDocumentsComplete(
       fotoKtpPath: _ktpFile!.path,
       fotoKkPath: _kkFile!.path,
       fotoDiriPath: _diriFile!.path,
       fotoBuktiPath: _buktiPembayaranFile!.path,
-      userData: currentUser, // ✅ KIRIM USER DATA YANG SUDAH VALIDASI
     );
 
     _isUploading = false;
@@ -717,68 +710,6 @@ Future<Map<String, dynamic>> uploadAllFilesWithBuktiPembayaran() async {
       'success': false,
       'message': 'Upload error: $e'
     };
-  }
-}
-
-// ✅ METHOD BARU: DAPATKAN USER DATA YANG VALID UNTUK UPLOAD
-Future<Map<String, dynamic>> _getValidUserDataForUpload() async {
-  try {
-    final apiService = ApiService();
-    
-    // ✅ COBA DAPATKAN DARI getCurrentUserForUpload() DULU
-    var currentUser = await apiService.getCurrentUserForUpload();
-    
-    print('🔍 Validating user data for upload...');
-    print('   - Initial user_id: ${currentUser?['user_id']}');
-    print('   - Initial user_key: ${currentUser?['user_key']}');
-    
-    // ✅ JIKA DATA TIDAK LENGKAP, COBA DARI getCurrentUser()
-    if (currentUser == null || 
-        currentUser['user_id'] == null || 
-        currentUser['user_key'] == null) {
-      
-      print('🔄 Falling back to getCurrentUser()...');
-      currentUser = await apiService.getCurrentUser();
-      
-      print('   - Fallback user_id: ${currentUser?['user_id']}');
-      print('   - Fallback user_key: ${currentUser?['user_key']}');
-    }
-    
-    // ✅ JIKA MASIH TIDAK LENGKAP, GUNAKAN SHARED PREFERENCES
-    if (currentUser == null || 
-        currentUser['user_id'] == null || 
-        currentUser['user_key'] == null) {
-      
-      print('🔄 Falling back to SharedPreferences...');
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token');
-      final userId = prefs.getString('user_id');
-      final userKey = prefs.getString('user_key');
-      
-      currentUser = {
-        'user_id': userId,
-        'user_key': userKey,
-        'token': token,
-      };
-      
-      print('   - Prefs user_id: $userId');
-      print('   - Prefs user_key: $userKey');
-    }
-    
-    // ✅ VALIDASI FINAL
-    if (currentUser == null || currentUser['user_id'] == null) {
-      throw Exception('Data user tidak lengkap. user_id: ${currentUser?['user_id']}, user_key: ${currentUser?['user_key']}');
-    }
-    
-    print('✅ User data validated:');
-    print('   - user_id: ${currentUser['user_id']}');
-    print('   - user_key: ${currentUser['user_key']?.toString().substring(0, 10)}...');
-    
-    return currentUser;
-    
-  } catch (e) {
-    print('❌ Error getting valid user data: $e');
-    rethrow;
   }
 }
 
