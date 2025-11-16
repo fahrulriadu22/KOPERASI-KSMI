@@ -137,7 +137,6 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
     return true;
   }
 
-// ✅ PERBAIKAN: Validasi yang lebih smart
 bool _isDocumentUploadedToServer(String type) {
   String? documentUrl;
   
@@ -158,33 +157,18 @@ bool _isDocumentUploadedToServer(String type) {
   
   print('🔍 DEBUG Server Status for $type: "$documentUrl"');
   
-  // ✅ PERBAIKAN: Validasi yang lebih fleksibel
+  // ✅ PERBAIKAN: Validasi lebih simple
   if (documentUrl == null || 
       documentUrl.toString().isEmpty || 
       documentUrl.toString().toLowerCase() == 'null') {
     return false;
   }
   
-  // ✅ JIKA SERVER MENGEMBALIKAN 'uploaded', ANGGAP SUDAH TERUPLOAD
-  if (documentUrl.toString().toLowerCase() == 'uploaded') {
-    print('✅ Server confirms $type is uploaded');
-    return true;
-  }
+  // ✅ JIKA ADA STRING APAPUN (termasuk 'uploaded'), ANGGAP SUDAH TERUPLOAD
+  final hasValue = documentUrl.toString().trim().isNotEmpty;
   
-  // ✅ CEK JIKA ADA URL/GAMBAR
-  final urlString = documentUrl.toString().trim();
-  final hasImageExtension = 
-      urlString.toLowerCase().contains('.jpg') || 
-      urlString.toLowerCase().contains('.jpeg') || 
-      urlString.toLowerCase().contains('.png') ||
-      urlString.toLowerCase().contains('.webp');
-  
-  final isUploaded = hasImageExtension && 
-      urlString.length > 3 && // Minimal ada karakter
-      !urlString.toLowerCase().contains('null');
-  
-  print('✅ $type uploaded status: $isUploaded');
-  return isUploaded;
+  print('✅ $type uploaded status: $hasValue');
+  return hasValue;
 }
 
 Future<void> _uploadDocument(String type, String documentName) async {
