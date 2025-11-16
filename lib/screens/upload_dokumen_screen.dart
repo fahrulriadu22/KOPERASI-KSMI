@@ -268,30 +268,31 @@ Future<void> _uploadDocument(String type, String documentName) async {
   }
 }
 
-Future<void> _uploadDocument(String type, String documentName) async {
+Future<void> _takePhoto(String type, String documentName) async {
   try {
     final XFile? pickedFile = await _imagePicker.pickImage(
-      source: ImageSource.gallery,
+      source: ImageSource.camera,
       maxWidth: 1200,
       maxHeight: 800,
       imageQuality: 80,
     );
 
     if (pickedFile != null) {
-      // ✅ JPG ONLY VALIDATION
-      final fileExtension = pickedFile.path.toLowerCase().split('.').last;
-      if (fileExtension != 'jpg' && fileExtension != 'jpeg') {
-        _showSafeSnackBar(
-          'Hanya format JPG/JPEG! File Anda: .$fileExtension',
-          isError: true
-        );
-        return;
+      // ✅ KAMERA AUTO JPG, LANGSUNG PAKAI!
+      final file = File(pickedFile.path);
+      print('📸 Taking photo for $documentName: ${file.path}');
+      
+      // ✅ LANGSUNG SIMPAN FILE DARI KAMERA
+      if (!await file.exists()) {
+        throw Exception('File tidak ditemukan');
       }
 
-      final file = File(pickedFile.path);
-      print('📤 Uploading $documentName: ${file.path}');
-      
-      // ✅ LANGSUNG PAKAI FILE ASLI
+      final fileSize = await file.length();
+      if (fileSize == 0) {
+        throw Exception('File kosong (0 bytes)');
+      }
+
+      // ✅ SIMPAN FILE ASLI DARI KAMERA
       switch (type) {
         case 'ktp':
           await _storageService.setKtpFile(file);
@@ -307,11 +308,18 @@ Future<void> _uploadDocument(String type, String documentName) async {
           break;
       }
 
-      _showSafeSnackBar('$documentName berhasil disimpan ✅');
+      if (mounted) {
+        setState(() {});
+      }
+
+      _showSafeSnackBar('$documentName berhasil diambil ✅');
+      print('💾 $documentName from camera saved (JPG ASLI)');
+      
       _checkAutoUpload();
     }
   } catch (e) {
-    _showSafeSnackBar('Gagal upload $documentName: $e', isError: true);
+    print('❌ Camera failed: $e');
+    _showSafeSnackBar('Gagal mengambil foto $documentName: $e', isError: true);
   }
 }
 
