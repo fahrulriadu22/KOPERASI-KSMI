@@ -10,6 +10,7 @@ import 'dart:typed_data'; // ✅ UNTUK Uint8List
 import 'package:flutter/material.dart'; // UNTUK BuildContext
 import 'global_session_checker.dart'; // UNTUK GlobalSessionChecker
 import 'device_service.dart';
+import 'package:dio/dio.dart';
 
 class ApiService {
   static const String baseUrl = 'http://demo.bsdeveloper.id/api';
