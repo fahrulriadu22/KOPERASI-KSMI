@@ -226,7 +226,7 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
           case 'diri':
             await _storageService.setDiriFile(file);
             break;
-          case 'bukti':
+          case 'bukti_pembayaran':
             await _storageService.setBuktiPembayaranFile(file);
             break;
         }
@@ -378,7 +378,7 @@ class _UploadDokumenScreenState extends State<UploadDokumenScreen> {
 
   // ✅ UPLOAD BUKTI PEMBAYARAN
   Future<void> _uploadBuktiPembayaran() async {
-    await _uploadDocument('bukti', 'Bukti Pembayaran');
+    await _uploadDocument('bukti_pembayaran', 'Bukti Pembayaran');
   }
 
   // ✅ UPLOAD KTP DARI KAMERA
