@@ -187,154 +187,134 @@ bool _isDocumentUploadedToServer(String type) {
   return isUploaded;
 }
 
-  // ✅ PERBAIKAN: UPLOAD DOKUMEN DENGAN SAFE CHECK
-  Future<void> _uploadDocument(String type, String documentName) async {
-    try {
-      final XFile? pickedFile = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1200,
-        maxHeight: 800,
-        imageQuality: 85,
-      );
+Future<void> _uploadDocument(String type, String documentName) async {
+  try {
+    final XFile? pickedFile = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1200,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
 
-      if (pickedFile != null) {
-        if (mounted) {
-          setState(() {
-            _uploadError = null;
-          });
-        }
-
-        final file = File(pickedFile.path);
-        print('📤 Uploading $documentName: ${file.path}');
-        
-        // ✅ VALIDASI FILE - HANYA JPG/JPEG
-        if (!await file.exists()) {
-          throw Exception('File tidak ditemukan');
-        }
-
-        final fileSize = file.lengthSync();
-        if (fileSize > 5 * 1024 * 1024) {
-          throw Exception('Ukuran file terlalu besar. Maksimal 5MB.');
-        }
-
-        final fileExtension = pickedFile.path.toLowerCase().split('.').last;
-        if (!['jpg', 'jpeg', 'png'].contains(fileExtension)) {
-          throw Exception('Format file tidak didukung. Gunakan JPG, JPEG atau PNG saja.');
-        }
-
-        // ✅ SIMPAN FILE KE TEMPORARY STORAGE
-        switch (type) {
-          case 'ktp':
-            await _storageService.setKtpFile(file);
-            break;
-          case 'kk':
-            await _storageService.setKkFile(file);
-            break;
-          case 'diri':
-            await _storageService.setDiriFile(file);
-            break;
-          case 'bukti_pembayaran':
-            await _storageService.setBuktiPembayaranFile(file);
-            break;
-        }
-
-        if (mounted) {
-          setState(() {});
-        }
-
-        // ✅ PERBAIKAN: GUNAKAN SAFE SNACKBAR
-        _showSafeSnackBar('$documentName berhasil disimpan ✅');
-
-        print('💾 $documentName saved to temporary storage');
-        
-        // ✅ CHECK AUTO UPLOAD SETELAH SIMPAN FILE
-        _checkAutoUpload();
+    if (pickedFile != null) {
+      // ✅ SOLUSI 3: CEK EXTENSION - HANYA JPG/JPEG
+      final fileExtension = pickedFile.path.toLowerCase().split('.').last;
+      if (fileExtension != 'jpg' && fileExtension != 'jpeg') {
+        _showSafeSnackBar(
+          'Hanya format JPG/JPEG yang didukung. File Anda: .$fileExtension\nSilakan pilih file JPG/JPEG lainnya.',
+          isError: true
+        );
+        return; // ✅ STOP JIKA BUKAN JPG
       }
-    } catch (e) {
+
+      final file = File(pickedFile.path);
+      print('📤 Uploading $documentName: ${file.path}');
+      
+      // ✅ LANGSUNG PAKAI FILE ASLI (SUDAH JPG)
+      if (!await file.exists()) {
+        throw Exception('File tidak ditemukan');
+      }
+
+      final fileSize = file.lengthSync();
+      if (fileSize > 5 * 1024 * 1024) {
+        throw Exception('Ukuran file terlalu besar. Maksimal 5MB.');
+      }
+
+      // ✅ SIMPAN FILE KE TEMPORARY STORAGE
+      switch (type) {
+        case 'ktp':
+          await _storageService.setKtpFile(file);
+          break;
+        case 'kk':
+          await _storageService.setKkFile(file);
+          break;
+        case 'diri':
+          await _storageService.setDiriFile(file);
+          break;
+        case 'bukti_pembayaran':
+          await _storageService.setBuktiPembayaranFile(file);
+          break;
+      }
+
       if (mounted) {
-        setState(() {
-          _uploadError = 'Error upload $documentName: $e';
-        });
+        setState(() {});
       }
 
-      print('❌ Upload failed: $e');
+      _showSafeSnackBar('$documentName berhasil disimpan ✅');
+      print('💾 $documentName saved to temporary storage');
       
-      // ✅ PERBAIKAN: GUNAKAN SAFE SNACKBAR
-      _showSafeSnackBar('Gagal upload $documentName: $e', isError: true);
+      _checkAutoUpload();
     }
+  } catch (e) {
+    if (mounted) {
+      setState(() {
+        _uploadError = 'Error upload $documentName: $e';
+      });
+    }
+    print('❌ Upload failed: $e');
+    _showSafeSnackBar('Gagal upload $documentName: $e', isError: true);
   }
+}
 
-  // ✅ PERBAIKAN: TAKE PHOTO DENGAN SAFE CHECK
-  Future<void> _takePhoto(String type, String documentName) async {
-    try {
-      final XFile? pickedFile = await _imagePicker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 1200,
-        maxHeight: 800,
-        imageQuality: 85,
-      );
+Future<void> _takePhoto(String type, String documentName) async {
+  try {
+    final XFile? pickedFile = await _imagePicker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 1200,
+      maxHeight: 800,
+      imageQuality: 85,
+    );
 
-      if (pickedFile != null) {
-        if (mounted && !_isNavigating) {
-          setState(() {
-            _uploadError = null;
-          });
-        }
-
-        final file = File(pickedFile.path);
-        print('📸 Taking photo for $documentName: ${file.path}');
-        
-        // ✅ VALIDASI FILE - HANYA JPG/JPEG
-        if (!await file.exists()) {
-          throw Exception('File tidak ditemukan');
-        }
-
-        final fileSize = file.lengthSync();
-        if (fileSize > 5 * 1024 * 1024) {
-          throw Exception('Ukuran file terlalu besar. Maksimal 5MB.');
-        }
-
-        // ✅ SIMPAN FILE KE TEMPORARY STORAGE
-        switch (type) {
-          case 'ktp':
-            await _storageService.setKtpFile(file);
-            break;
-          case 'kk':
-            await _storageService.setKkFile(file);
-            break;
-          case 'diri':
-            await _storageService.setDiriFile(file);
-            break;
-          case 'bukti_pembayaran':
-            await _storageService.setBuktiPembayaranFile(file);
-            break;
-        }
-
-        if (mounted && !_isNavigating) {
-          setState(() {});
-        }
-
-        // ✅ PERBAIKAN: GUNAKAN SAFE SNACKBAR
-        _showSafeSnackBar('$documentName berhasil diambil ✅');
-
-        print('💾 $documentName from camera saved to temporary storage');
-        
-        // ✅ CHECK AUTO UPLOAD SETELAH SIMPAN FILE
-        _checkAutoUpload();
-      }
-    } catch (e) {
-      if (mounted && !_isNavigating) {
-        setState(() {
-          _uploadError = 'Error mengambil foto $documentName: $e';
-        });
-      }
-
-      print('❌ Camera failed: $e');
+    if (pickedFile != null) {
+      // ✅ KAMERA SELALU PRODUCE JPG, jadi langsung pakai
+      final file = File(pickedFile.path);
+      print('📸 Taking photo for $documentName: ${file.path}');
       
-      // ✅ PERBAIKAN: GUNAKAN SAFE SNACKBAR
-      _showSafeSnackBar('Gagal mengambil foto $documentName: $e', isError: true);
+      // ✅ VALIDASI FILE KAMERA
+      if (!await file.exists()) {
+        throw Exception('File tidak ditemukan');
+      }
+
+      final fileSize = file.lengthSync();
+      if (fileSize > 5 * 1024 * 1024) {
+        throw Exception('Ukuran file terlalu besar. Maksimal 5MB.');
+      }
+
+      // ✅ SIMPAN FILE KE TEMPORARY STORAGE
+      switch (type) {
+        case 'ktp':
+          await _storageService.setKtpFile(file);
+          break;
+        case 'kk':
+          await _storageService.setKkFile(file);
+          break;
+        case 'diri':
+          await _storageService.setDiriFile(file);
+          break;
+        case 'bukti_pembayaran':
+          await _storageService.setBuktiPembayaranFile(file);
+          break;
+      }
+
+      if (mounted) {
+        setState(() {});
+      }
+
+      _showSafeSnackBar('$documentName berhasil diambil ✅');
+      print('💾 $documentName from camera saved to temporary storage');
+      
+      _checkAutoUpload();
     }
+  } catch (e) {
+    if (mounted) {
+      setState(() {
+        _uploadError = 'Error mengambil foto $documentName: $e';
+      });
+    }
+    print('❌ Camera failed: $e');
+    _showSafeSnackBar('Gagal mengambil foto $documentName: $e', isError: true);
   }
+}
 
   // ✅ CHECK AUTO UPLOAD JIKA SEMUA FILE LENGKAP
   void _checkAutoUpload() {
